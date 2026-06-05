@@ -18,8 +18,10 @@ domain: example.com
 namespacePrefix: cv-
 
 image:
-  # Where your built images live. Update to your registry.
-  registry: ghcr.io/hashtagcyber
+  # Where your built images live. Defaults to the public corpo-valley GHCR
+  # namespace published from https://github.com/corpo-valley/corpo-valley-main.
+  # Override if you self-host a fork.
+  registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   # Pin tags here once the cluster is stable; latest is fine while iterating.
   tags:
@@ -63,5 +65,9 @@ cluster:
 #     requests: { cpu: 1, memory: 2Gi }
 #     limits:   { cpu: 2, memory: 4Gi }
 
-giteaRunner:
-  replicas: 3   # bump for build concurrency
+scale:
+  giteaRunner: 3   # bump for build concurrency
+  hydra: 2         # HA across rolling restarts
+  oathkeeper: 2    # eliminates the gitea wildcard 502-gap during rollouts
+  portal: 2        # HA for the dashboard
+  mcpGateway: 2

@@ -3,9 +3,10 @@
 Helm chart for the Corpo Valley platform — a single-tenant monorepo platform
 that abstracts code + infra so non-technical users can drive Claude Code
 safely. The application source and per-component Dockerfiles live in
-[hashtagcyber/corpo-valley](https://github.com/hashtagcyber/corpo-valley);
-this chart packages the platform's Kubernetes manifests so a fresh cluster
-can be brought up with a single `helm install` and a value file.
+[corpo-valley/corpo-valley-main](https://github.com/corpo-valley/corpo-valley-main);
+images publish to `ghcr.io/corpo-valley/corpo-valley-*` (public). This chart
+packages the platform's Kubernetes manifests so a fresh cluster can be
+brought up with a single `helm install` and a value file.
 
 The chart renders 90+ resources: the Ory stack (Postgres, Kratos, Hydra, Keto,
 Oathkeeper), the portal + MCP gateway, Gitea + Actions runner, cv-registry, the
@@ -71,11 +72,11 @@ current `corpo-valley.com` deployment.
 | `hosts.projectsWildcard` | `*.projects.<domain>` | Wildcard the projects ArgoCD's Ingresses live under. |
 | `hosts.oathkeeperWildcard` | `true` | Whether Oathkeeper publishes the `*.<domain>` Ingress. |
 | `namespacePrefix` | `cv-` | Prefix for every platform namespace. Set to `acme-` etc. to coexist. |
-| `image.registry` | `ghcr.io/hashtagcyber` | Container image registry. |
+| `image.registry` | `ghcr.io/corpo-valley` | Container image registry. |
 | `image.prefix` | `corpo-valley-` | Concatenated with the component name. |
 | `image.tags.<component>` | `latest` | Per-component tag override. |
-| `image.pullSecret` | `ghcr-pull-secret` | imagePullSecret name; the chart does not create it. |
-| `git.platformRepoUrl` | corpo-valley.git | What the `corpo-valley` AppProject scopes child Applications to. |
+| `image.pullSecret` | `ghcr-pull-secret` | imagePullSecret name; the chart does not create it. Only needed if your registry is private. |
+| `git.platformRepoUrl` | corpo-valley-hetzner.git | What the `corpo-valley` AppProject scopes child Applications to (the deployment repo). |
 | `cloudflare.tunnelId` | *(required)* | UUID from `cloudflared tunnel create`. |
 | `cloudflare.tunnelName` | `corpo-valley-cluster` | Cosmetic. |
 | `email.fromAddress` | `noreply@dev.cobl.io` | Kratos courier visible "from" address. |

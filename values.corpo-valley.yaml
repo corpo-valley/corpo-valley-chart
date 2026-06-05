@@ -6,14 +6,14 @@ domain: corpo-valley.com
 namespacePrefix: cv-
 
 image:
-  registry: ghcr.io/hashtagcyber
+  registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   tags:
     portal: latest
     mcpGateway: latest
 
 git:
-  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley.git
+  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley-hetzner.git
   platformRepoBranch: main
 
 cloudflare:
@@ -35,5 +35,5 @@ cluster:
   serviceCIDR: 10.152.183.0/24
   nodeCIDR: 192.168.87.0/24
 
-giteaRunner:
-  replicas: 1
+scale:
+  giteaRunner: 1
