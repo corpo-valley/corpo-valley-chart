@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/hashtagcyber/corpo-valley-chart/values.schema.json",
+  "$id": "https://github.com/corpo-valley/corpo-valley-chart/values.schema.json",
   "title": "Corpo Valley chart values",
   "type": "object",
   "additionalProperties": false,

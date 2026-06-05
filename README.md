@@ -32,7 +32,7 @@ Assumes a fresh cluster with:
   `argocd.projectsArgocd.nsLogical` you set)
 
 The companion repo
-[corpo-valley-hetzner](https://github.com/hashtagcyber/corpo-valley-hetzner)
+[corpo-valley-hetzner](https://github.com/corpo-valley/corpo-valley-hetzner)
 provisions those prereqs on a 2-VM Hetzner cluster and runs the full install
 end-to-end. The rest of this README explains the chart itself.
 

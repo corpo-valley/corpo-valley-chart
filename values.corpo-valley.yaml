@@ -13,7 +13,7 @@ image:
     mcpGateway: latest
 
 git:
-  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley-hetzner.git
+  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
   platformRepoBranch: main
 
 cloudflare:

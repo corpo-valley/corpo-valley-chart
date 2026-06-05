@@ -22,7 +22,7 @@ appVersion: "MVP7"
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
   - https://github.com/corpo-valley/corpo-valley-main
-  - https://github.com/hashtagcyber/corpo-valley-chart
+  - https://github.com/corpo-valley/corpo-valley-chart
 
 maintainers:
   - name: corpo-valley

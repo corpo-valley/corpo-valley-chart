@@ -61,7 +61,7 @@ image:
 # build repo, not a deploy target) and NOT corpo-valley-chart (the chart
 # is consumed via Helm, not git-synced as raw YAML).
 git:
-  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley-hetzner.git
+  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
   platformRepoBranch: main
 
 # Cloudflare tunnel. The tunnel ID + creds JSON are supplied via a sealed
