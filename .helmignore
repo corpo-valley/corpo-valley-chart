@@ -1,0 +1,19 @@
+# Helm packaging ignores
+.DS_Store
+.git/
+.gitignore
+.github/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# CI / testing
+.idea/
+.vscode/
+ci/
+tests/
+# Local-only files
+out/
+*.local.yaml
+*.local.tgz

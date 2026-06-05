@@ -1,0 +1,70 @@
+{{/*
+  Platform-side ArgoCD AppProjects.
+
+  - `corpo-valley`: lives in the platform ArgoCD namespace (argocd by default),
+    scopes child Applications (cv-infra, cv-platform, cv-projects-argocd) to
+    cv-* namespaces.
+  - `projects`: lives in cv-projects-argocd, scopes per-project Applications to
+    Gitea-hosted repos and tenant namespaces.
+
+  Neither manifest installs ArgoCD itself — the chart assumes the cluster
+  already runs a platform ArgoCD (in `argocd`) and a projects ArgoCD (in
+  cv-projects-argocd). The hetzner bootstrap installs both as prereqs.
+*/}}
+{{- if include "cv.role.platform" . }}
+{{- $projectsArgocdNs := include "cv.ns" (list $ $.Values.argocd.projectsArgocd.nsLogical) }}
+{{- $giteaSvc := include "cv.svc" (list $ "gitea" "gitea") }}
+---
+# Platform AppProject. Bootstrap manifest — applied alongside this chart, not
+# managed by ArgoCD itself (to avoid the chicken-and-egg of the project
+# managing the very project rule that authorizes its own Application).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: corpo-valley
+  namespace: argocd
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  description: Corpo Valley platform — single-tenant deployment scope.
+  sourceRepos:
+    - {{ $.Values.git.platformRepoUrl | quote }}
+  destinations:
+    - namespace: '{{ $.Values.namespacePrefix }}*'
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - { group: "", kind: Namespace }
+    - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy }
+    - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
+    - { group: rbac.authorization.k8s.io, kind: ClusterRole }
+    - { group: rbac.authorization.k8s.io, kind: ClusterRoleBinding }
+{{- if $.Values.argocd.projectsArgocd.enabled }}
+---
+# Projects AppProject. Lives in the projects-argocd namespace so the projects
+# ArgoCD instance can scope per-project Applications.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $.Values.argocd.projectsArgocd.appProject }}
+  namespace: {{ $projectsArgocdNs }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  description: Per-project user workloads (deployed by the projects ArgoCD).
+  sourceRepos:
+    - "http://{{ $giteaSvc }}/**"
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - { group: '',                  kind: '*' }
+    - { group: apps,                kind: '*' }
+    - { group: networking.k8s.io,   kind: Ingress }
+    - { group: autoscaling,         kind: '*' }
+    - { group: batch,               kind: '*' }
+    - { group: bitnami.com,         kind: SealedSecret }
+{{- end }}
+{{- end }}

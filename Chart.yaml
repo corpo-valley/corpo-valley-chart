@@ -1,0 +1,39 @@
+apiVersion: v2
+name: corpo-valley
+description: |
+  Corpo Valley platform — a parameterized Helm chart for the single-tenant
+  monorepo platform at github.com/hashtagcyber/corpo-valley. Renders the Ory
+  identity stack, the portal, Gitea, dual ArgoCD, registry, MCP gateway, and
+  the per-project bounds (VAPs / AppProjects / NetworkPolicies).
+
+  Phase 1 ships `role: all-in-one` — one cluster, current deployment shape,
+  same hostnames and namespaces by default. The `role: platform` / `role:
+  tenants` modes are scaffolded for a future platform/tenants cluster split
+  but are not yet rendered by this version.
+
+type: application
+version: 0.1.0
+appVersion: "MVP7"
+
+home: https://github.com/hashtagcyber/corpo-valley
+sources:
+  - https://github.com/hashtagcyber/corpo-valley
+  - https://github.com/hashtagcyber/corpo-valley-chart
+
+maintainers:
+  - name: hashtagcyber
+    url: https://github.com/hashtagcyber
+
+keywords:
+  - ory
+  - kratos
+  - hydra
+  - argocd
+  - gitops
+  - mcp
+  - claude-code
+
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial chart packaging the current corpo-valley deployment

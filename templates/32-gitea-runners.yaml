@@ -1,0 +1,189 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "gitea-runners") }}
+{{- $giteaSvc := include "cv.svc" (list $ "gitea" "gitea") }}
+{{- $giteaInternalUrl := printf "http://%s" $giteaSvc }}
+{{- $portalNs := include "cv.ns" (list $ "portal") }}
+{{- $giteaNs := include "cv.ns" (list $ "gitea") }}
+{{- $registryNs := include "cv.ns" (list $ "registry") }}
+{{- $registrySvc := include "cv.svc" (list $ "registry" "registry") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitea-runner-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+data:
+  config.yaml: |
+    log:
+      level: info
+    runner:
+      file: /data/.runner
+      capacity: 1
+      timeout: 3h
+      shutdown_timeout: 0s
+      insecure: false
+      fetch_timeout: 5s
+      fetch_interval: 2s
+      labels: []
+    cache:
+      enabled: true
+      dir: /data/cache
+    container:
+      network: ""
+      privileged: false
+      options: ""
+      workdir_parent: ""
+      valid_volumes: []
+      docker_host: ""
+      force_rebuild: false
+    host:
+      workdir_parent: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea-runner-headless
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app: gitea-runner
+  ports:
+    - { name: noop, port: 1, targetPort: 1 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gitea-runner
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: gitea-runner
+spec:
+  replicas: {{ $.Values.giteaRunner.replicas }}
+  serviceName: gitea-runner-headless
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: gitea-runner
+  template:
+    metadata:
+      labels:
+        app: gitea-runner
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      containers:
+        - name: act-runner
+          image: gitea/act_runner:0.2.10
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GITEA_INSTANCE_URL
+              value: {{ $giteaInternalUrl | quote }}
+            - name: GITEA_RUNNER_REGISTRATION_TOKEN
+              valueFrom: { secretKeyRef: { name: runner-registration-token, key: GITEA_RUNNER_REGISTRATION_TOKEN } }
+            - name: GITEA_RUNNER_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: GITEA_RUNNER_LABELS
+              value: "ubuntu-latest:docker://gitea/runner-images@sha256:d8503ef8e254bcae990af67fce023892f1d774bc2b0a09a207d72eda5f098b50,ubuntu-22.04:docker://gitea/runner-images@sha256:d8503ef8e254bcae990af67fce023892f1d774bc2b0a09a207d72eda5f098b50"
+            - { name: CONFIG_FILE, value: /config/config.yaml }
+            - { name: DOCKER_HOST, value: "unix:///shared/docker.sock" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: dind-sock, mountPath: /shared }
+          resources:
+            {{- toYaml $.Values.resources.giteaRunnerActRunner | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["pgrep", "act_runner"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+        - name: dind
+          image: docker:24-dind
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--host=unix:///shared/docker.sock"
+            - "--host=tcp://0.0.0.0:2375"
+            - "--insecure-registry={{ $registrySvc }}:5000"
+          securityContext:
+            privileged: true
+          env:
+            - { name: DOCKER_TLS_CERTDIR, value: "" }
+          volumeMounts:
+            - { name: docker-graph, mountPath: /var/lib/docker }
+            - { name: dind-sock, mountPath: /shared }
+          resources:
+            {{- toYaml $.Values.resources.giteaRunnerDind | nindent 12 }}
+          livenessProbe:
+            tcpSocket: { port: 2375 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: gitea-runner-config
+        - name: docker-graph
+          emptyDir: {}
+        - name: dind-sock
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if $.Values.storage.className }}
+        storageClassName: {{ $.Values.storage.className }}
+        {{- end }}
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-runner-egress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gitea-runner
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $giteaNs }} } }
+      ports:
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 3000 }
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $registryNs }} } }
+      ports:
+        - { protocol: TCP, port: 5000 }
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $portalNs }} } }
+      ports:
+        - { protocol: TCP, port: 3000 }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 443 }
+{{- end }}

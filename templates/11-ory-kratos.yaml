@@ -1,0 +1,316 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "ory") }}
+{{- $portalSvc := include "cv.svc" (list $ "portal" "portal") }}
+{{- $portalHost := include "cv.host" (list $ "portal") }}
+{{- $authHost := include "cv.host" (list $ "auth") }}
+{{- $ketoWrite := include "cv.svc" (list $ "ory-keto-write" "ory") }}
+{{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ory-kratos-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+data:
+  kratos.yaml: |
+    version: v1.3.0
+
+    serve:
+      public:
+        base_url: https://{{ $authHost }}
+        cors:
+          enabled: true
+          allowed_origins:
+            - https://{{ $portalHost }}
+            - {{ include "cv.corsWildcard" $ }}
+          allowed_methods: [GET, POST, PUT, PATCH, DELETE]
+          allowed_headers: [Authorization, Content-Type, Cookie]
+          exposed_headers: [Set-Cookie]
+          allow_credentials: true
+      admin:
+        base_url: http://ory-kratos-admin:4434
+
+    selfservice:
+      default_browser_return_url: https://{{ $portalHost }}/
+      allowed_return_urls:
+        - https://{{ $portalHost }}
+        - {{ include "cv.corsWildcard" $ }}
+
+      methods:
+        password:
+          enabled: true
+        code:
+          enabled: true
+          passwordless_enabled: true
+        link:
+          enabled: true
+
+      flows:
+        login:
+          ui_url: https://{{ $portalHost }}/login
+          lifespan: 10m
+        registration:
+          ui_url: https://{{ $portalHost }}/registration
+          lifespan: 10m
+          after:
+            hooks:
+              - hook: web_hook
+                config:
+                  url: http://{{ $ketoWrite }}:4467/admin/relation-tuples
+                  method: PUT
+                  body: file:///etc/kratos/config/everyone-grant.jsonnet
+                  can_interrupt: false
+                  response:
+                    ignore: true
+              - hook: web_hook
+                config:
+                  url: http://{{ $portalSvc }}:80/internal/kratos/after-registration
+                  method: POST
+                  body: file:///etc/kratos/config/bot-create-webhook.jsonnet
+                  can_interrupt: false
+                  response:
+                    ignore: true
+        verification:
+          ui_url: https://{{ $portalHost }}/verification
+          enabled: true
+          lifespan: 720h
+        recovery:
+          ui_url: https://{{ $portalHost }}/recovery
+          enabled: true
+        error:
+          ui_url: https://{{ $portalHost }}/error
+        settings:
+          ui_url: https://{{ $portalHost }}/settings
+          privileged_session_max_age: 15m
+
+    session:
+      cookie:
+        domain: {{ $.Values.domain }}
+        same_site: Lax
+      lifespan: 720h
+      earliest_possible_extend: 168h
+
+    cookies:
+      domain: {{ $.Values.domain }}
+      same_site: Lax
+
+    identity:
+      default_schema_id: person
+      schemas:
+        - id: person
+          url: file:///etc/kratos/schemas/person.schema.json
+
+    oauth2_provider:
+      url: http://{{ $hydraAdmin }}:4445
+
+    courier:
+      smtp:
+        connection_uri: smtp://localhost:25/?disable_starttls=true
+        from_address: {{ $.Values.email.fromAddress }}
+        from_name: {{ $.Values.email.fromName | quote }}
+
+  person.schema.json: |
+    {
+      "$id": "https://schemas.{{ $.Values.domain }}/person.schema.json",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Person",
+      "type": "object",
+      "properties": {
+        "traits": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email",
+              "ory.sh/kratos": {
+                "credentials": {
+                  "password": { "identifier": true },
+                  "code": { "identifier": true, "via": "email" }
+                },
+                "verification": { "via": "email" },
+                "recovery": { "via": "email" }
+              }
+            },
+            "name": {
+              "type": "object",
+              "properties": {
+                "first": { "type": "string", "title": "First Name" },
+                "last": { "type": "string", "title": "Last Name" }
+              }
+            },
+            "preferred_username": {
+              "type": "string",
+              "title": "Username",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9._-]+$"
+            }
+          },
+          "required": ["email"],
+          "additionalProperties": false
+        }
+      }
+    }
+  everyone-grant.jsonnet: |
+    function(ctx) {
+      namespace: "groups",
+      object: "EVERYONE",
+      relation: "members",
+      subject_id: ctx.identity.id,
+    }
+  bot-create-webhook.jsonnet: |
+    function(ctx) {
+      identity: {
+        id: ctx.identity.id,
+        traits: ctx.identity.traits,
+        metadata_public: if std.objectHas(ctx.identity, "metadata_public") then ctx.identity.metadata_public else {},
+      },
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ory-kratos
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ory-kratos
+  template:
+    metadata:
+      labels:
+        app: ory-kratos
+      annotations:
+        config-revision: "2026-05-27-mvp1-init"
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      initContainers:
+        - name: kratos-migrate
+          image: oryd/kratos:v1.3.0
+          args: [migrate, sql, -e, --yes, --config, /etc/kratos/config/kratos.yaml]
+          env:
+            - name: DSN
+              valueFrom:
+                secretKeyRef: { name: ory-db-credentials, key: DSN_KRATOS }
+            - name: SECRETS_COOKIE
+              valueFrom:
+                secretKeyRef: { name: ory-kratos-secrets, key: SECRETS_COOKIE }
+            - name: SECRETS_CIPHER
+              valueFrom:
+                secretKeyRef: { name: ory-kratos-secrets, key: SECRETS_CIPHER }
+          volumeMounts:
+            - { name: config, mountPath: /etc/kratos/config }
+            - { name: schemas, mountPath: /etc/kratos/schemas }
+      containers:
+        - name: kratos
+          image: oryd/kratos:v1.3.0
+          args: [serve, all, --watch-courier, --config, /etc/kratos/config/kratos.yaml]
+          ports:
+            - { name: public, containerPort: 4433 }
+            - { name: admin,  containerPort: 4434 }
+          env:
+            - name: DSN
+              valueFrom:
+                secretKeyRef: { name: ory-db-credentials, key: DSN_KRATOS }
+            - name: SECRETS_COOKIE
+              valueFrom:
+                secretKeyRef: { name: ory-kratos-secrets, key: SECRETS_COOKIE }
+            - name: SECRETS_CIPHER
+              valueFrom:
+                secretKeyRef: { name: ory-kratos-secrets, key: SECRETS_CIPHER }
+            - name: COURIER_SMTP_CONNECTION_URI
+              valueFrom:
+                secretKeyRef: { name: kratos-smtp, key: COURIER_SMTP_CONNECTION_URI }
+          volumeMounts:
+            - { name: config, mountPath: /etc/kratos/config }
+            - { name: schemas, mountPath: /etc/kratos/schemas }
+          resources:
+            {{- toYaml $.Values.resources.kratos | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /health/alive, port: 4433 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 4433 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: ory-kratos-config
+            items:
+              - { key: kratos.yaml,                path: kratos.yaml }
+              - { key: everyone-grant.jsonnet,     path: everyone-grant.jsonnet }
+              - { key: bot-create-webhook.jsonnet, path: bot-create-webhook.jsonnet }
+        - name: schemas
+          configMap:
+            name: ory-kratos-config
+            items:
+              - { key: person.schema.json, path: person.schema.json }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-kratos-public
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+    component: public
+spec:
+  selector:
+    app: ory-kratos
+  ports:
+    - { protocol: TCP, port: 4433, targetPort: 4433 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-kratos-admin
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+    component: admin
+spec:
+  selector:
+    app: ory-kratos
+  ports:
+    - { protocol: TCP, port: 4434, targetPort: 4434 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ory-kratos
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    {{- with $.Values.ingress.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: {{ $authHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ory-kratos-public
+                port:
+                  number: 4433
+{{- end }}

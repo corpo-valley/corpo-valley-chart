@@ -1,0 +1,177 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "ory") }}
+{{- $portalHost := include "cv.host" (list $ "portal") }}
+{{- $oauthHost := include "cv.host" (list $ "oauth") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ory-hydra-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+data:
+  hydra.yaml: |
+    serve:
+      public:
+        cors:
+          enabled: true
+          allowed_origins:
+            - https://{{ $portalHost }}
+            - {{ include "cv.corsWildcard" $ }}
+          allowed_methods: [GET, POST, PUT, PATCH, DELETE]
+          allowed_headers: [Authorization, Content-Type]
+          allow_credentials: true
+      admin:
+        host: 0.0.0.0
+        port: 4445
+
+    urls:
+      self:
+        issuer: https://{{ $oauthHost }}
+        public: https://{{ $oauthHost }}
+      consent: https://{{ $portalHost }}/consent
+      login: https://{{ $portalHost }}/login
+      logout: https://{{ $portalHost }}/logout
+      error: https://{{ $portalHost }}/error
+      post_logout_redirect: https://{{ $portalHost }}/
+
+    oidc:
+      subject_identifiers:
+        supported_types: [public]
+      dynamic_client_registration:
+        enabled: true
+
+    ttl:
+      access_token: 1h
+      refresh_token: 720h
+      id_token: 1h
+      auth_code: 10m
+      login_consent_request: 30m
+
+    oauth2:
+      expose_internal_errors: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ory-hydra
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ory-hydra
+  template:
+    metadata:
+      labels:
+        app: ory-hydra
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      initContainers:
+        - name: hydra-migrate
+          image: oryd/hydra:v2.3.0
+          args: [migrate, sql, -e, --yes, --config, /etc/hydra/config/hydra.yaml]
+          env:
+            - name: DSN
+              valueFrom: { secretKeyRef: { name: ory-db-credentials, key: DSN_HYDRA } }
+            - name: SECRETS_SYSTEM
+              valueFrom: { secretKeyRef: { name: ory-hydra-secrets, key: SECRETS_SYSTEM } }
+            - name: SECRETS_COOKIE
+              valueFrom: { secretKeyRef: { name: ory-hydra-secrets, key: SECRETS_COOKIE } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/hydra/config }
+      containers:
+        - name: hydra
+          image: oryd/hydra:v2.3.0
+          args: [serve, all, --config, /etc/hydra/config/hydra.yaml]
+          ports:
+            - { name: public, containerPort: 4444 }
+            - { name: admin,  containerPort: 4445 }
+          env:
+            - name: DSN
+              valueFrom: { secretKeyRef: { name: ory-db-credentials, key: DSN_HYDRA } }
+            - name: SECRETS_SYSTEM
+              valueFrom: { secretKeyRef: { name: ory-hydra-secrets, key: SECRETS_SYSTEM } }
+            - name: SECRETS_COOKIE
+              valueFrom: { secretKeyRef: { name: ory-hydra-secrets, key: SECRETS_COOKIE } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/hydra/config }
+          resources:
+            {{- toYaml $.Values.resources.hydra | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /health/alive, port: 4444 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 4444 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: ory-hydra-config
+            items:
+              - { key: hydra.yaml, path: hydra.yaml }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-hydra-public
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+    component: public
+spec:
+  selector:
+    app: ory-hydra
+  ports:
+    - { protocol: TCP, port: 4444, targetPort: 4444 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-hydra-admin
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+    component: admin
+spec:
+  selector:
+    app: ory-hydra
+  ports:
+    - { protocol: TCP, port: 4445, targetPort: 4445 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ory-hydra
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+  {{- with $.Values.ingress.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: {{ $oauthHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ory-hydra-public
+                port:
+                  number: 4444
+{{- end }}

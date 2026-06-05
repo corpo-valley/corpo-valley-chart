@@ -1,0 +1,252 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "ory") }}
+{{- $portalHost := include "cv.host" (list $ "portal") }}
+{{- $giteaHost := include "cv.host" (list $ "gitea") }}
+{{- $giteaSvc := include "cv.svc" (list $ "gitea" "gitea") }}
+{{- $ketoRead := include "cv.svc" (list $ "ory-keto-read" "ory") }}
+{{- $kratosPublic := include "cv.svc" (list $ "ory-kratos-public" "ory") }}
+{{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
+{{- $projectsWildcard := include "cv.projectsWildcard" $ }}
+{{- $projectsHostSuffix := include "cv.projectsHostSuffix" $ }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ory-oathkeeper-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+data:
+  oathkeeper.yaml: |
+    serve:
+      proxy:
+        port: 4455
+      api:
+        port: 4456
+
+    errors:
+      fallback:
+        - json
+      handlers:
+        json:
+          enabled: true
+          config:
+            verbose: false
+        redirect:
+          enabled: true
+          config:
+            to: https://{{ $portalHost }}/login
+            return_to_query_param: return_to
+            when:
+              - error: [unauthorized, forbidden]
+                request:
+                  header:
+                    accept: [text/html]
+
+    access_rules:
+      matching_strategy: regexp
+      repositories:
+        - file:///etc/oathkeeper/config/rules-gitea.json
+        - file:///etc/oathkeeper/config/rules-projects.json
+
+    authenticators:
+      noop:
+        enabled: true
+      oauth2_introspection:
+        enabled: true
+        config:
+          introspection_url: http://{{ $hydraAdmin }}:4445/admin/oauth2/introspect
+          token_from:
+            header: Authorization
+      cookie_session:
+        enabled: true
+        config:
+          check_session_url: http://{{ $kratosPublic }}:4433/sessions/whoami
+          preserve_path: true
+          extra_from: "@this"
+          subject_from: "identity.id"
+          only:
+            - ory_kratos_session
+      anonymous:
+        enabled: true
+        config:
+          subject: anonymous
+
+    authorizers:
+      allow:
+        enabled: true
+      deny:
+        enabled: true
+      remote_json:
+        enabled: true
+        config:
+          remote: http://{{ $ketoRead }}:4466/relation-tuples/check
+          payload: |
+            {
+              "namespace": "services",
+              "object": "{{ "{{ printIndex .MatchContext.RegexpCaptureGroups 0 }}" }}",
+              "relation": "access",
+              "subject_id": "{{ "{{ print .Subject }}" }}"
+            }
+
+    mutators:
+      noop:
+        enabled: true
+      header:
+        enabled: true
+        config:
+          headers:
+            X-User-Id: "{{ "{{ print .Subject }}" }}"
+            X-User-Email: "{{ "{{ print .Extra.identity.traits.email }}" }}"
+
+  rules-gitea.json: |
+    [
+      {
+        "id": "gitea-git-api-rule",
+        "version": "v0.40.0",
+        "match": { "url": "<https?://>{{ $giteaHost }}/<(api/.*|v2/.*|.+\\.git/.*)>", "methods": ["GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS"] },
+        "authenticators": [{ "handler": "noop" }],
+        "authorizer": { "handler": "allow" },
+        "mutators": [{ "handler": "noop" }],
+        "upstream": { "url": "http://{{ $giteaSvc }}:80", "preserve_host": true }
+      },
+      {
+        "id": "gitea-ui-rule",
+        "_comment": "Gitea web UI — gated by Kratos session + Keto access.",
+        "version": "v0.40.0",
+        "match": { "url": "<https?://>{{ $giteaHost }}/<(?!api/|v2/|.+\\.git/).*>", "methods": ["GET","POST","PUT","DELETE","PATCH"] },
+        "authenticators": [{ "handler": "cookie_session" }],
+        "authorizer": {
+          "handler": "remote_json",
+          "config": {
+            "remote": "http://{{ $ketoRead }}:4466/relation-tuples/check",
+            "payload": "{\"namespace\":\"services\",\"object\":\"gitea\",\"relation\":\"access\",\"subject_id\":\"{{ "{{ print .Subject }}" }}\"}"
+          }
+        },
+        "mutators": [{
+          "handler": "header",
+          "config": { "headers": { "X-User-Id": "{{ "{{ print .Subject }}" }}", "X-User-Email": "{{ "{{ print .Extra.identity.traits.email }}" }}" } }
+        }],
+        "upstream": { "url": "http://{{ $giteaSvc }}:80", "preserve_host": true }
+      }
+    ]
+
+  rules-projects.json: |
+    [
+      {
+        "id": "projects-cookie-session",
+        "version": "v0.40.0",
+        "match": { "url": "<https?://><[a-z0-9-]+>.{{ $projectsHostSuffix | replace "." "\\." }}/<.*>", "methods": ["GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS"] },
+        "authenticators": [{ "handler": "cookie_session" }],
+        "authorizer": { "handler": "allow" },
+        "mutators": [{ "handler": "noop" }],
+        "upstream": { "url": "http://127.0.0.1" }
+      }
+    ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ory-oathkeeper
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ory-oathkeeper
+  template:
+    metadata:
+      labels:
+        app: ory-oathkeeper
+      annotations:
+        config-revision: "2026-06-01-mvp5-projects-decisions"
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      containers:
+        - name: oathkeeper
+          image: oryd/oathkeeper:v0.40
+          args: [serve, --config, /etc/oathkeeper/config/oathkeeper.yaml]
+          ports:
+            - { name: proxy, containerPort: 4455 }
+            - { name: api,   containerPort: 4456 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/oathkeeper/config }
+          resources:
+            {{- toYaml $.Values.resources.oathkeeper | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /health/alive, port: 4456 }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 4456 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: ory-oathkeeper-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-oathkeeper-proxy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+    component: proxy
+spec:
+  selector:
+    app: ory-oathkeeper
+  ports:
+    - { protocol: TCP, port: 4455, targetPort: 4455 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-oathkeeper-api
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+    component: api
+spec:
+  selector:
+    app: ory-oathkeeper
+  ports:
+    - { protocol: TCP, port: 4456, targetPort: 4456 }
+{{- if $.Values.hosts.oathkeeperWildcard }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ory-oathkeeper
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    {{- with $.Values.ingress.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: "*.{{ $.Values.domain }}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ory-oathkeeper-proxy
+                port:
+                  number: 4455
+{{- end }}
+{{- end }}

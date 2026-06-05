@@ -1,0 +1,118 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "portal") }}
+{{- $oauthHost := include "cv.host" (list $ "oauth") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-gateway
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: mcp-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-gateway
+  template:
+    metadata:
+      labels:
+        app: mcp-gateway
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp-gateway
+          image: {{ include "cv.image" (list $ "mcp-gateway") }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HYDRA_PUBLIC_URL
+              value: "https://{{ $oauthHost }}"
+            - name: PROJECTS_DOMAIN
+              value: {{ include "cv.projectsHostSuffix" $ | quote }}
+          resources:
+            {{- toYaml $.Values.resources.mcpGateway | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-gateway
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: mcp-gateway
+spec:
+  selector:
+    app: mcp-gateway
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-mcp-gateway-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp-gateway
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - { ipBlock: { cidr: {{ $.Values.cluster.nodeCIDR }} } }
+    - from:
+        - { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress } } }
+      ports: [{ protocol: TCP, port: 3000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-mcp-gateway-egress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp-gateway
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ include "cv.ns" (list $ "ory") }} } }
+          podSelector: { matchLabels: { app: ory-hydra } }
+      ports: [{ protocol: TCP, port: 4444 }, { protocol: TCP, port: 4445 }]
+    - to:
+        - { ipBlock: { cidr: {{ $.Values.cluster.podCIDR }} } }
+        - { ipBlock: { cidr: {{ $.Values.cluster.serviceCIDR }} } }
+      ports: [{ protocol: TCP, port: 80 }, { protocol: TCP, port: 9000 }]
+{{- end }}
