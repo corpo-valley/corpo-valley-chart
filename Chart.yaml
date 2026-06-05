@@ -2,27 +2,31 @@ apiVersion: v2
 name: corpo-valley
 description: |
   Corpo Valley platform — a parameterized Helm chart for the single-tenant
-  monorepo platform at github.com/hashtagcyber/corpo-valley. Renders the Ory
-  identity stack, the portal, Gitea, dual ArgoCD, registry, MCP gateway, and
-  the per-project bounds (VAPs / AppProjects / NetworkPolicies).
+  platform that abstracts code + infra so non-technical users can drive Claude
+  Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
+  registry, MCP gateway, and the per-project bounds (VAPs / AppProjects /
+  NetworkPolicies).
 
-  Phase 1 ships `role: all-in-one` — one cluster, current deployment shape,
-  same hostnames and namespaces by default. The `role: platform` / `role:
-  tenants` modes are scaffolded for a future platform/tenants cluster split
-  but are not yet rendered by this version.
+  Platform images are built from github.com/corpo-valley/corpo-valley-main and
+  published to ghcr.io/corpo-valley/corpo-valley-*. This chart references them
+  via values but does not require any source from the build repo.
+
+  Phase 1 ships `role: all-in-one` — one cluster, single platform instance.
+  The `role: platform` / `role: tenants` modes are scaffolded for a future
+  platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
 version: 0.1.0
 appVersion: "MVP7"
 
-home: https://github.com/hashtagcyber/corpo-valley
+home: https://github.com/corpo-valley/corpo-valley-main
 sources:
-  - https://github.com/hashtagcyber/corpo-valley
+  - https://github.com/corpo-valley/corpo-valley-main
   - https://github.com/hashtagcyber/corpo-valley-chart
 
 maintainers:
-  - name: hashtagcyber
-    url: https://github.com/hashtagcyber
+  - name: corpo-valley
+    url: https://github.com/corpo-valley
 
 keywords:
   - ory

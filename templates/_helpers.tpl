@@ -63,7 +63,8 @@
 {{- end -}}
 
 {{/* Image ref for a platform component.
-     ghcr.io/hashtagcyber/corpo-valley-<name>:<tag>
+     <image.registry>/<image.prefix><name>:<tag>
+     Default registry produces ghcr.io/corpo-valley/corpo-valley-<name>:<tag>.
      Tag resolves to image.tags.<name> if set, else image.defaultTag. */}}
 {{- define "cv.image" -}}
 {{- $root := index . 0 -}}
