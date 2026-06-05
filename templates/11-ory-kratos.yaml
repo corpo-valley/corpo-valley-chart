@@ -180,7 +180,10 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: ory-kratos
 spec:
-  replicas: 1
+  # NOTE: every replica runs --watch-courier (see args below). With scale.kratos > 1
+  # the courier workers race on the Postgres outbox; safe but inefficient. For HA
+  # courier, run scale.kratos: 1 here and a separate dedicated-courier deployment.
+  replicas: {{ $.Values.scale.kratos | default 1 }}
   selector:
     matchLabels:
       app: ory-kratos

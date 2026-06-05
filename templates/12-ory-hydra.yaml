@@ -62,7 +62,7 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: ory-hydra
 spec:
-  replicas: 1
+  replicas: {{ $.Values.scale.hydra | default 1 }}
   selector:
     matchLabels:
       app: ory-hydra

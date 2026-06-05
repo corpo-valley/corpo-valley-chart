@@ -40,7 +40,7 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: ory-keto
 spec:
-  replicas: 1
+  replicas: {{ $.Values.scale.keto | default 1 }}
   selector:
     matchLabels:
       app: ory-keto

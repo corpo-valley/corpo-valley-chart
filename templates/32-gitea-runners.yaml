@@ -64,7 +64,7 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: gitea-runner
 spec:
-  replicas: {{ $.Values.giteaRunner.replicas }}
+  replicas: {{ $.Values.scale.giteaRunner | default 1 }}
   serviceName: gitea-runner-headless
   podManagementPolicy: Parallel
   selector:

@@ -215,9 +215,12 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: portal
 spec:
-  replicas: 1
+  replicas: {{ $.Values.scale.portal | default 1 }}
+  # Recreate avoids pod-cap pressure on a single-node cluster (MaxSurge would
+  # try to schedule a second pod before evicting the old). Once scale.portal > 1
+  # the strategy becomes irrelevant — rolling over a pool is always safe.
   strategy:
-    type: Recreate
+    type: {{ ternary "RollingUpdate" "Recreate" (gt (int ($.Values.scale.portal | default 1)) 1) }}
   selector:
     matchLabels:
       app: portal

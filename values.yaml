@@ -139,9 +139,24 @@ resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits:   { cpu: 100m, memory: 128Mi }
 
-# Gitea runner replica count. Scale up for build concurrency.
-giteaRunner:
-  replicas: 1
+# Replicas per stateless component.
+#
+# Stateful components (ory-postgres, gitea, registry) are pinned to 1 because
+# they hold local state on RWO storage and have no built-in replication.
+# Scaling them requires real HA work — see SCALING.md.
+#
+# Kratos caveat: every replica runs the courier worker (`--watch-courier`),
+# which uses a Postgres row lock to dedupe. Safe but inefficient with N > 1;
+# for proper separation split into a dedicated courier Deployment (Phase 2).
+scale:
+  kratos: 1
+  hydra: 1
+  keto: 1
+  oathkeeper: 1
+  portal: 1
+  mcpGateway: 1
+  giteaRunner: 1
+  cloudflared: 1
 
 # ArgoCD configuration.
 argocd:

@@ -38,7 +38,7 @@ metadata:
     {{- include "cv.labels" $ | nindent 4 }}
     app: cloudflare-tunnel
 spec:
-  replicas: 1
+  replicas: {{ $.Values.scale.cloudflared | default 1 }}
   selector:
     matchLabels:
       app: cloudflare-tunnel

@@ -104,11 +104,18 @@
     "resources": {
       "type": "object"
     },
-    "giteaRunner": {
+    "scale": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "replicas": { "type": "integer", "minimum": 1 }
+        "kratos":      { "type": "integer", "minimum": 1 },
+        "hydra":       { "type": "integer", "minimum": 1 },
+        "keto":        { "type": "integer", "minimum": 1 },
+        "oathkeeper":  { "type": "integer", "minimum": 1 },
+        "portal":      { "type": "integer", "minimum": 1 },
+        "mcpGateway":  { "type": "integer", "minimum": 1 },
+        "giteaRunner": { "type": "integer", "minimum": 1 },
+        "cloudflared": { "type": "integer", "minimum": 1 }
       }
     },
     "argocd": {
