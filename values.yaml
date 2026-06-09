@@ -1,0 +1,192 @@
+# Corpo Valley Helm chart — defaults.
+#
+# These reproduce the current corpo-valley.com deployment when used unchanged.
+# Override what you need in your own values file; everything has a sensible
+# default so the chart can run with only the required sealed-secrets in place.
+#
+# See README.md for the install flow.
+# ----------------------------------------------------------------------------
+
+# Deployment role.
+#
+# Phase 1: only "all-in-one" renders fully. The "platform" / "tenants" modes
+# scaffold a future cluster split where the projects-argocd controller on the
+# platform cluster targets a separate tenants cluster. Until that lift is done,
+# leave this on all-in-one.
+role: all-in-one  # all-in-one | platform | tenants
+
+# Base domain. Drives every default host below.
+domain: corpo-valley.com
+
+# Per-host overrides. Empty values fall back to "<key>.<domain>".
+hosts:
+  portal: ""
+  auth: ""
+  oauth: ""
+  gitea: ""
+  mcp: ""
+  # The wildcard host used by the projects subdomain. Defaults to
+  # "*.projects.<domain>" — change only if your DNS structure differs.
+  projectsWildcard: ""
+  # Whether Oathkeeper publishes a wildcard *.<domain> Ingress.
+  # Disable for tenants-only deployments that don't terminate the wildcard.
+  oathkeeperWildcard: true
+
+# Every cv-* namespace is namespacePrefix + a logical name.
+# Override the prefix to coexist with another platform on the same cluster
+# (e.g. "acme-" yields acme-ory, acme-portal, ...).
+namespacePrefix: cv-
+
+# Container images.
+# Default produces e.g. ghcr.io/corpo-valley/corpo-valley-portal:latest.
+# Images are built and published from https://github.com/corpo-valley/corpo-valley-main.
+# Per-component tag override beats image.defaultTag.
+image:
+  registry: ghcr.io/corpo-valley
+  prefix: corpo-valley-
+  pullPolicy: IfNotPresent
+  defaultTag: latest
+  # Name of the imagePullSecret each workload references. Must exist in the
+  # workload's namespace; the chart does NOT create it (use kubectl create
+  # secret docker-registry, or a sealed secret).
+  pullSecret: ghcr-pull-secret
+  # Keys are the literal image/component names (they complete
+  # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
+  tags:
+    portal: latest
+    mcp-gateway: latest
+
+# Git source the platform ArgoCD AppProject scopes child Applications to.
+# This is the deployment repo that ArgoCD reconciles to keep the chart's
+# rendered output in the cluster — corpo-valley-hetzner, or whatever
+# deployment shape you're running. NOT corpo-valley-main (that's the image
+# build repo, not a deploy target) and NOT corpo-valley-chart (the chart
+# is consumed via Helm, not git-synced as raw YAML).
+git:
+  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  platformRepoBranch: main
+
+# Cloudflare tunnel. The tunnel ID + creds JSON are supplied via a sealed
+# secret named "cloudflare-tunnel-credentials" — the chart only renders the
+# Deployment that mounts it.
+cloudflare:
+  tunnelName: corpo-valley-cluster
+
+# Email / SMTP.
+# Kratos picks up COURIER_SMTP_CONNECTION_URI from the sealed "kratos-smtp"
+# secret; here you only configure the visible from-line.
+email:
+  fromAddress: noreply@dev.cobl.io
+  fromName: Corpo Valley
+
+# Persistent storage.
+# Set className to the RWO storage class your cluster ships with:
+#   - microk8s-hostpath (current corpo-valley.com deploy)
+#   - hcloud-volumes (Hetzner)
+#   - "" = use cluster default
+storage:
+  className: ""
+  oryPostgres: 5Gi
+  gitea: 10Gi
+  registry: 50Gi
+
+# Ingress controller class.
+ingress:
+  className: nginx
+  commonAnnotations: {}
+
+# Cluster CIDRs.
+# Consumed by the portal when it emits per-project egress NetworkPolicies.
+# These MUST match the live cluster's pod/service/node ranges or the egress
+# baseline will break.
+cluster:
+  podCIDR: 10.1.0.0/16
+  serviceCIDR: 10.152.183.0/24
+  nodeCIDR: 192.168.87.0/24
+  sealedSecretsControllerUrl: http://sealed-secrets-controller.kube-system.svc.cluster.local:8080/v1/cert.pem
+  # SPKI sha256 pin of the sealed-secrets controller cert. REQUIRED for
+  # project-secret sealing: the portal runs NODE_ENV=production and refuses
+  # trust-on-first-use without an explicit pin. Get it after the controller
+  # is up:   ./scripts/print-cert-pin.sh
+  sealedSecretsCertSha256: ""
+
+# Resources for each platform component (mirror the current deploy).
+resources:
+  oryPostgres:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  kratos:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 250m, memory: 256Mi }
+  hydra:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 250m, memory: 256Mi }
+  keto:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 200m, memory: 128Mi }
+  oathkeeper:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+  portal:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 250m, memory: 256Mi }
+  gitea:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 1Gi }
+  giteaRunnerActRunner:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1, memory: 1Gi }
+  giteaRunnerDind:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 2, memory: 2Gi }
+  registry:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  mcpGateway:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 250m, memory: 128Mi }
+  cloudflared:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 100m, memory: 128Mi }
+
+# Replicas per stateless component.
+#
+# Stateful components (ory-postgres, gitea, registry) are pinned to 1 because
+# they hold local state on RWO storage and have no built-in replication.
+# Scaling them requires real HA work — see SCALING.md.
+#
+# Kratos caveat: every replica runs the courier worker (`--watch-courier`),
+# which uses a Postgres row lock to dedupe. Safe but inefficient with N > 1;
+# for proper separation split into a dedicated courier Deployment (Phase 2).
+scale:
+  kratos: 1
+  hydra: 1
+  keto: 1
+  oathkeeper: 1
+  portal: 1
+  mcpGateway: 1
+  giteaRunner: 1
+  cloudflared: 1
+
+# ArgoCD configuration.
+argocd:
+  # The projects ArgoCD is a second ArgoCD instance dedicated to per-project
+  # Applications. In role=all-in-one it runs on the same cluster; in
+  # role=platform it targets the tenants cluster.
+  projectsArgocd:
+    enabled: true
+    nsLogical: projects-argocd    # final ns is namespacePrefix + this
+    appProject: projects
+  # Hydra clients that skip the consent screen. claude-code-mcp is the client
+  # MCP tooling (Claude Code / Cursor / Codex) uses to drive the MCP server.
+  trustedClientIds: argocd,gitea,claude-code-mcp
+  disableSubmoduleInit: true
+
+# MCP gateway. publicUrl defaults to https://<hosts.mcp>.
+mcp:
+  publicUrl: ""
+  enforceAudience: false
+
+# Phase-2 placeholders kept so values files stay forward-compatible.
+backups:
+  enabled: false

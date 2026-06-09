@@ -1,0 +1,198 @@
+{{/*
+  ValidatingAdmissionPolicies that fence per-project ArgoCD writes.
+  Five policies + bindings. Active in both role=platform and role=tenants —
+  they live wherever the projects-argocd controller targets a cluster.
+*/}}
+{{- if include "cv.role.tenants" . }}
+{{- $projectsArgocdNs := include "cv.ns" (list $ $.Values.argocd.projectsArgocd.nsLogical) }}
+{{- $controllerSa := printf "system:serviceaccount:%s:argocd-application-controller" $projectsArgocdNs }}
+{{- $appProject := $.Values.argocd.projectsArgocd.appProject }}
+{{- $projectsHostSuffix := include "cv.projectsHostSuffix" $ }}
+{{- $oryNs := include "cv.ns" (list $ "ory") }}
+{{- $kratosPublicSvc := include "cv.svc" (list $ "ory-kratos-public" "ory") }}
+{{- $oathkeeperApiSvc := include "cv.svc" (list $ "ory-oathkeeper-api" "ory") }}
+{{- $nsPrefix := $.Values.namespacePrefix }}
+{{- $platformDenylist := list "default" "argocd" "ingress-nginx" "ingress-controller" }}
+{{- $platformDenylistCEL := printf "['%s']" (join "','" $platformDenylist) }}
+---
+# (1) Per-Application bounds: destination.namespace == metadata.name, in-cluster API, not a platform ns.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-app-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["applications"]
+  matchConditions:
+    - name: only-projects-appproject
+      expression: "has(object.spec.project) && object.spec.project == '{{ $appProject }}'"
+  validations:
+    - expression: "has(object.spec.destination.namespace) && object.spec.destination.namespace == object.metadata.name"
+      messageExpression: "'Project Application destination.namespace must equal the Application name (got namespace=' + (has(object.spec.destination.namespace) ? object.spec.destination.namespace : '<unset>') + ', name=' + object.metadata.name + ').'"
+    - expression: "!object.spec.destination.namespace.startsWith('{{ $nsPrefix }}') && !object.spec.destination.namespace.startsWith('kube-') && !(object.spec.destination.namespace in {{ $platformDenylistCEL }})"
+      message: "Project Application destination.namespace must not be a platform / system namespace."
+    - expression: "(!has(object.spec.destination.server) || object.spec.destination.server == 'https://kubernetes.default.svc') && (!has(object.spec.destination.name) || object.spec.destination.name == 'in-cluster')"
+      message: "Project Application destination must be the in-cluster Kubernetes API."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-app-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-app-bounds
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ $projectsArgocdNs }}
+---
+# (2) Per-resource bounds: tracking-id slug == metadata.namespace.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-resource-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["", "apps", "networking.k8s.io", "autoscaling", "batch", "bitnami.com", "rbac.authorization.k8s.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+        scope: Namespaced
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+  variables:
+    - name: trackingId
+      expression: "(has(object.metadata.annotations) && 'argocd.argoproj.io/tracking-id' in object.metadata.annotations) ? object.metadata.annotations['argocd.argoproj.io/tracking-id'] : ''"
+    - name: app
+      expression: "variables.trackingId.split(':')[0]"
+  validations:
+    - expression: "variables.app != '' && variables.app == object.metadata.namespace"
+      messageExpression: "'Project ArgoCD may only deploy resources into its slug namespace (app=' + variables.app + ', namespace=' + object.metadata.namespace + ').'"
+    - expression: "!object.metadata.namespace.startsWith('{{ $nsPrefix }}') && !object.metadata.namespace.startsWith('kube-') && !(object.metadata.namespace in {{ $platformDenylistCEL }})"
+      message: "Project ArgoCD cannot deploy resources into a platform / system namespace."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-resource-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-resource-bounds
+  validationActions: [Deny]
+---
+# (3) Namespace-creation bounds — block platform/system ns names via CreateNamespace=true.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-namespace-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+  validations:
+    - expression: "!object.metadata.name.startsWith('{{ $nsPrefix }}') && !object.metadata.name.startsWith('kube-') && !(object.metadata.name in {{ $platformDenylistCEL }})"
+      message: "Project ArgoCD cannot create platform / system namespaces."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-namespace-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-namespace-bounds
+  validationActions: [Deny]
+---
+# (4) Ingress bounds — host must be {slug}.<projects-suffix>; must carry auth-url.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-ingress-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingresses"]
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+  validations:
+    - expression: "has(object.spec.rules) && object.spec.rules.all(r, has(r.host) && r.host == object.metadata.namespace + '.{{ $projectsHostSuffix }}')"
+      messageExpression: "'Project Ingress hosts must all equal ' + object.metadata.namespace + '.{{ $projectsHostSuffix }}'"
+    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:'))"
+      message: "Project Ingress must carry an auth-url annotation pointing at the platform identity gate (Kratos whoami or Oathkeeper decisions)."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-ingress-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-ingress-bounds
+  validationActions: [Deny]
+---
+# (5) Cluster-scoped backstop — projects controller cannot create cluster-scoped resources (except Namespace).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-cluster-scoped-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+        scope: Cluster
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+    - name: not-namespace
+      expression: "request.resource.resource != 'namespaces'"
+  validations:
+    - expression: "false"
+      messageExpression: "'Project ArgoCD cannot create cluster-scoped resources (got resource=' + request.resource.resource + '). Only Namespace is permitted (via cv-projects-namespace-bounds).'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-cluster-scoped-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-cluster-scoped-bounds
+  validationActions: [Deny]
+{{- end }}

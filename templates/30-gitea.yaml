@@ -1,0 +1,107 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "gitea") }}
+{{- $giteaHost := include "cv.host" (list $ "gitea") }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if $.Values.storage.className }}
+  storageClassName: {{ $.Values.storage.className }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $.Values.storage.gitea }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: gitea
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22.6-rootless
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - { name: GITEA__server__DOMAIN, value: {{ $giteaHost | quote }} }
+            - { name: GITEA__server__ROOT_URL, value: "https://{{ $giteaHost }}/" }
+            - { name: GITEA__server__SSH_DOMAIN, value: {{ $giteaHost | quote }} }
+            - { name: GITEA__server__DISABLE_SSH, value: "true" }
+            - { name: GITEA__server__START_SSH_SERVER, value: "false" }
+            - { name: GITEA__server__OFFLINE_MODE, value: "true" }
+            - { name: GITEA__service__DISABLE_REGISTRATION, value: "false" }
+            - { name: GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION, value: "true" }
+            - { name: GITEA__service__SHOW_REGISTRATION_BUTTON, value: "false" }
+            - { name: GITEA__service__REQUIRE_SIGNIN_VIEW, value: "false" }
+            - { name: GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION, value: "true" }
+            - { name: GITEA__oauth2_client__USERNAME, value: preferred_username }
+            - { name: GITEA__oauth2_client__ACCOUNT_LINKING, value: login }
+            - { name: GITEA__database__DB_TYPE, value: sqlite3 }
+            - { name: GITEA__database__PATH, value: /var/lib/gitea/data/gitea.db }
+            - { name: GITEA__repository__DEFAULT_BRANCH, value: main }
+            - { name: GITEA__security__INSTALL_LOCK, value: "true" }
+            - { name: GITEA__security__COOKIE_SECURE, value: "false" }
+            - name: GITEA__security__SECRET_KEY
+              valueFrom: { secretKeyRef: { name: gitea-secrets, key: SECRET_KEY } }
+            - name: GITEA__security__INTERNAL_TOKEN
+              valueFrom: { secretKeyRef: { name: gitea-secrets, key: INTERNAL_TOKEN } }
+            - { name: GITEA__log__LEVEL, value: info }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/gitea }
+            - { name: config, mountPath: /etc/gitea }
+          resources:
+            {{- toYaml $.Values.resources.gitea | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /api/healthz, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /api/healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gitea-data
+        - name: config
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: gitea
+spec:
+  selector:
+    app: gitea
+  ports:
+    - { name: http, port: 80, targetPort: 3000 }
+{{- end }}

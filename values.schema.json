@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/corpo-valley/corpo-valley-chart/values.schema.json",
+  "title": "Corpo Valley chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "domain", "namespacePrefix", "image"],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": ["all-in-one", "platform", "tenants"],
+      "default": "all-in-one"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "portal":           { "type": "string" },
+        "auth":             { "type": "string" },
+        "oauth":            { "type": "string" },
+        "gitea":            { "type": "string" },
+        "mcp":              { "type": "string" },
+        "projectsWildcard": { "type": "string" },
+        "oathkeeperWildcard": { "type": "boolean" }
+      }
+    },
+    "namespacePrefix": {
+      "type": "string",
+      "pattern": "^[a-z]([a-z0-9-]*-)$",
+      "description": "Must be lowercase, end in '-'. Examples: cv-, acme-, beta-"
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry", "prefix"],
+      "properties": {
+        "registry":   { "type": "string" },
+        "prefix":     { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "defaultTag": { "type": "string" },
+        "pullSecret": { "type": "string" },
+        "tags": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platformRepoUrl":    { "type": "string" },
+        "platformRepoBranch": { "type": "string" }
+      }
+    },
+    "cloudflare": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tunnelName": { "type": "string" },
+        "tunnelId":   { "type": "string", "description": "UUID from `cloudflared tunnel create`. Required at install time." }
+      }
+    },
+    "email": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fromAddress": { "type": "string" },
+        "fromName":    { "type": "string" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "className":   { "type": "string" },
+        "oryPostgres": { "type": "string" },
+        "gitea":       { "type": "string" },
+        "registry":    { "type": "string" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "className":         { "type": "string" },
+        "commonAnnotations": { "type": "object" }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "podCIDR":     { "type": "string" },
+        "serviceCIDR": { "type": "string" },
+        "nodeCIDR":    { "type": "string" },
+        "sealedSecretsControllerUrl": { "type": "string" },
+        "sealedSecretsCertSha256": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{64})?$",
+          "description": "SPKI sha256 pin of the sealed-secrets controller cert (lowercase hex, from scripts/print-cert-pin.sh). Empty omits the pin env, which disables project-secret sealing in production images."
+        }
+      }
+    },
+    "resources": {
+      "type": "object"
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kratos":      { "type": "integer", "minimum": 1 },
+        "hydra":       { "type": "integer", "minimum": 1 },
+        "keto":        { "type": "integer", "minimum": 1 },
+        "oathkeeper":  { "type": "integer", "minimum": 1 },
+        "portal":      { "type": "integer", "minimum": 1 },
+        "mcpGateway":  { "type": "integer", "minimum": 1 },
+        "giteaRunner": { "type": "integer", "minimum": 1 },
+        "cloudflared": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "argocd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectsArgocd": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled":    { "type": "boolean" },
+            "nsLogical":  { "type": "string" },
+            "appProject": { "type": "string" }
+          }
+        },
+        "trustedClientIds":     { "type": "string" },
+        "disableSubmoduleInit": { "type": "boolean" }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publicUrl":       { "type": "string" },
+        "enforceAudience": { "type": "boolean" }
+      }
+    },
+    "backups": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    }
+  }
+}

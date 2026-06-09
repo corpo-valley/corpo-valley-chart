@@ -1,0 +1,79 @@
+# corpo-valley chart — example values for a new deployment.
+#
+# Copy this to your own values file (or to corpo-valley-hetzner/clusters/<name>/values.yaml)
+# and fill in the placeholder values. Everything else falls back to defaults
+# in values.yaml that reproduce the current corpo-valley.com deployment.
+
+role: all-in-one
+
+# Your zone. Subdomains (auth, oauth, portal, gitea, mcp) and the projects
+# wildcard derive from this.
+domain: example.com
+
+# Optional: per-host overrides if your DNS isn't subdomain-based.
+# hosts:
+#   portal: my-portal.example.com
+
+# Coexistence: change if another platform on the same cluster owns "cv-*".
+namespacePrefix: cv-
+
+image:
+  # Where your built images live. Defaults to the public corpo-valley GHCR
+  # namespace published from https://github.com/corpo-valley/corpo-valley-main.
+  # Override if you self-host a fork.
+  registry: ghcr.io/corpo-valley
+  prefix: corpo-valley-
+  # Pin tags here once the cluster is stable; latest is fine while iterating.
+  # Keys are the literal image names: portal, mcp-gateway.
+  tags:
+    portal: latest
+    mcp-gateway: latest
+
+git:
+  # The deployment repo ArgoCD reconciles. Usually corpo-valley-hetzner.
+  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  platformRepoBranch: main
+
+cloudflare:
+  # Required. Get this from `cloudflared tunnel create <name>`.
+  tunnelId: ""
+  tunnelName: corpo-valley-cluster
+
+email:
+  fromAddress: noreply@example.com
+  fromName: Corpo Valley
+
+storage:
+  # Pick the RWO storage class your cluster has.
+  #   microk8s-hostpath  - microk8s on a laptop / single-node box
+  #   hcloud-volumes     - Hetzner Cloud
+  #   ""                  - cluster default
+  className: hcloud-volumes
+  oryPostgres: 5Gi
+  gitea: 20Gi
+  registry: 200Gi
+
+# Cluster CIDRs - MUST match the cluster's actual ranges or per-project egress
+# NetworkPolicies will break. Check with `kubectl cluster-info dump | grep -i cidr`.
+cluster:
+  podCIDR: 10.42.0.0/16        # k3s default
+  serviceCIDR: 10.43.0.0/16    # k3s default
+  nodeCIDR: 10.0.0.0/24        # Hetzner private network range, adjust
+  # SPKI sha256 pin of your sealed-secrets controller cert. Required for the
+  # portal to seal per-project secrets (production images refuse
+  # trust-on-first-use). Once the controller is up, fill in the output of:
+  #   ./scripts/print-cert-pin.sh
+  sealedSecretsCertSha256: ""
+
+# Override per-component resources here. Defaults mirror corpo-valley.com.
+# resources:
+#   oryPostgres:
+#     requests: { cpu: 1, memory: 2Gi }
+#     limits:   { cpu: 2, memory: 4Gi }
+
+scale:
+  giteaRunner: 3   # bump for build concurrency
+  hydra: 2         # HA across rolling restarts
+  oathkeeper: 2    # eliminates the gitea wildcard 502-gap during rollouts
+  portal: 2        # HA for the dashboard
+  mcpGateway: 2

@@ -1,0 +1,80 @@
+{{/*
+  Cloudflare tunnel. The tunnel UUID + credentials live in a sealed secret
+  named `cloudflare-tunnel-credentials` — the chart only renders the config +
+  Deployment that consume it. Operator workflow:
+
+    1. cloudflared tunnel login
+    2. cloudflared tunnel create <name>    -> note the UUID
+    3. seal the credentials.json into cloudflare-tunnel-credentials.sealed.yaml
+       in the {{ include "cv.ns" (list $ "cloudflared") }} namespace
+    4. cloudflared tunnel route dns <UUID> '*.{{ .Values.domain }}'
+       cloudflared tunnel route dns <UUID> '{{ include "cv.projectsWildcard" . }}'
+    5. set cloudflare.tunnelId in values.yaml to <UUID>
+*/}}
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "cloudflared") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflare-tunnel-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+data:
+  config.yaml: |
+    tunnel: {{ required "cloudflare.tunnelId is required (the UUID from `cloudflared tunnel create`)." (index .Values "cloudflare" "tunnelId" | default "") }}
+    credentials-file: /etc/cloudflared/credentials.json
+
+    ingress:
+      - service: http://ingress-controller.ingress.svc.cluster.local:80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-tunnel
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cloudflare-tunnel
+spec:
+  replicas: {{ $.Values.scale.cloudflared | default 1 }}
+  selector:
+    matchLabels:
+      app: cloudflare-tunnel
+  template:
+    metadata:
+      labels:
+        app: cloudflare-tunnel
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --config
+            - /etc/cloudflared/config.yaml
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+          resources:
+            {{- toYaml $.Values.resources.cloudflared | nindent 12 }}
+          volumeMounts:
+            - { name: config, mountPath: /etc/cloudflared/config.yaml, subPath: config.yaml, readOnly: true }
+            - { name: credentials, mountPath: /etc/cloudflared/credentials.json, subPath: credentials.json, readOnly: true }
+          livenessProbe:
+            httpGet: { path: /ready, port: 2000 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /ready, port: 2000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: cloudflare-tunnel-config
+        - name: credentials
+          secret:
+            secretName: cloudflare-tunnel-credentials
+{{- end }}

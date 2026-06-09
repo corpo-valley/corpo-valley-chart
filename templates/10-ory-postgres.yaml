@@ -1,0 +1,155 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "ory") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ory-postgres-initdb
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-postgres
+data:
+  init-databases.sh: |
+    #!/bin/bash
+    set -e
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      CREATE DATABASE kratos;
+      CREATE DATABASE hydra;
+      CREATE DATABASE keto;
+      CREATE DATABASE portal;
+
+      CREATE USER kratos WITH PASSWORD '${KRATOS_PASSWORD}';
+      CREATE USER hydra  WITH PASSWORD '${HYDRA_PASSWORD}';
+      CREATE USER keto   WITH PASSWORD '${KETO_PASSWORD}';
+      CREATE USER portal WITH PASSWORD '${PORTAL_PASSWORD}';
+
+      GRANT ALL PRIVILEGES ON DATABASE kratos TO kratos;
+      GRANT ALL PRIVILEGES ON DATABASE hydra  TO hydra;
+      GRANT ALL PRIVILEGES ON DATABASE keto   TO keto;
+      GRANT ALL PRIVILEGES ON DATABASE portal TO portal;
+
+      \c kratos
+      GRANT ALL ON SCHEMA public TO kratos;
+
+      \c hydra
+      GRANT ALL ON SCHEMA public TO hydra;
+
+      \c keto
+      GRANT ALL ON SCHEMA public TO keto;
+
+      \c portal
+      GRANT ALL ON SCHEMA public TO portal;
+    EOSQL
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ory-postgres
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-postgres
+spec:
+  serviceName: ory-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ory-postgres
+  template:
+    metadata:
+      labels:
+        app: ory-postgres
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_DB
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ory-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: KRATOS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ory-db-credentials
+                  key: KRATOS_PASSWORD
+            - name: HYDRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ory-db-credentials
+                  key: HYDRA_PASSWORD
+            - name: KETO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ory-db-credentials
+                  key: KETO_PASSWORD
+            - name: PORTAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ory-db-credentials
+                  key: PORTAL_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            {{- toYaml $.Values.resources.oryPostgres | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: initdb
+          configMap:
+            name: ory-postgres-initdb
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: ory-postgres
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if $.Values.storage.className }}
+        storageClassName: {{ $.Values.storage.className }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $.Values.storage.oryPostgres }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-postgres
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-postgres
+spec:
+  selector:
+    app: ory-postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+{{- end }}

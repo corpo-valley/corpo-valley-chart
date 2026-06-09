@@ -1,0 +1,42 @@
+# Values for the current production corpo-valley.com deployment.
+# Mirrors what's live on the single-node microk8s cluster.
+
+role: all-in-one
+domain: corpo-valley.com
+namespacePrefix: cv-
+
+image:
+  registry: ghcr.io/corpo-valley
+  prefix: corpo-valley-
+  # Pinned to the live deploy (k8s/platform/*.yaml in hashtagcyber/corpo-valley).
+  tags:
+    portal: 20260609-8589d7b
+    mcp-gateway: 20260609-1f5c5d4
+
+git:
+  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  platformRepoBranch: main
+
+cloudflare:
+  tunnelId: eb36fca0-1f28-4556-b313-f2d823e7cff2
+  tunnelName: corpo-valley-cluster
+
+email:
+  fromAddress: noreply@dev.cobl.io
+  fromName: Corpo Valley
+
+storage:
+  className: microk8s-hostpath
+  oryPostgres: 5Gi
+  gitea: 10Gi
+  registry: 20Gi   # NOTE: bumping this to 500Gi was the chart's first recommendation; live cluster still on 20Gi
+
+cluster:
+  podCIDR: 10.1.0.0/16
+  serviceCIDR: 10.152.183.0/24
+  nodeCIDR: 192.168.87.0/24
+  # SPKI sha256 of the live cluster's sealed-secrets controller cert.
+  sealedSecretsCertSha256: a9d59cf74dba2c8a816c2e8def601018ba6f2c4c1dd6146c74857c286f21aebc
+
+scale:
+  giteaRunner: 1

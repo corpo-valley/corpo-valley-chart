@@ -1,0 +1,163 @@
+{{- if include "cv.role.platform" . }}
+{{- $ns := include "cv.ns" (list $ "ory") }}
+{{- $ketoWrite := include "cv.svc" (list $ "ory-keto-write" "ory") }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ory-keto-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+data:
+  keto.yaml: |
+    version: v0.12.0
+
+    serve:
+      read:
+        host: 0.0.0.0
+        port: 4466
+      write:
+        host: 0.0.0.0
+        port: 4467
+
+    namespaces:
+      - name: groups
+      - name: services
+      - name: projects
+
+    log:
+      level: info
+      format: json
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ory-keto
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+spec:
+  replicas: {{ $.Values.scale.keto | default 1 }}
+  selector:
+    matchLabels:
+      app: ory-keto
+  template:
+    metadata:
+      labels:
+        app: ory-keto
+      annotations:
+        config-revision: "2026-05-27-mvp1-init"
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      initContainers:
+        - name: keto-migrate
+          image: oryd/keto:v0.12
+          args: ["migrate", "up", "-y", "--config", "/etc/keto/config/keto.yaml"]
+          env:
+            - name: DSN
+              valueFrom: { secretKeyRef: { name: ory-db-credentials, key: DSN_KETO } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/keto/config }
+      containers:
+        - name: keto
+          image: oryd/keto:v0.12
+          args: ["serve", "--config", "/etc/keto/config/keto.yaml"]
+          ports:
+            - { name: read,  containerPort: 4466 }
+            - { name: write, containerPort: 4467 }
+          env:
+            - name: DSN
+              valueFrom: { secretKeyRef: { name: ory-db-credentials, key: DSN_KETO } }
+          resources:
+            {{- toYaml $.Values.resources.keto | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /health/alive, port: read }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /health/ready, port: read }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - { name: config, mountPath: /etc/keto/config }
+      volumes:
+        - name: config
+          configMap:
+            name: ory-keto-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-keto-read
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+    component: read
+spec:
+  selector:
+    app: ory-keto
+  ports:
+    - { protocol: TCP, port: 4466, targetPort: 4466 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ory-keto-write
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+    component: write
+spec:
+  selector:
+    app: ory-keto
+  ports:
+    - { protocol: TCP, port: 4467, targetPort: 4467 }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-keto-group-hierarchy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+    component: group-hierarchy
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: ory-keto-bootstrap
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          image: oryd/keto:v0.12
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /tmp/hierarchy.json <<'EOF'
+              [
+                {"namespace":"groups","object":"EVERYONE","relation":"members","subject_set":{"namespace":"groups","object":"BETA","relation":"members"}},
+                {"namespace":"groups","object":"BETA","relation":"members","subject_set":{"namespace":"groups","object":"ALPHA","relation":"members"}},
+                {"namespace":"groups","object":"ALPHA","relation":"members","subject_set":{"namespace":"groups","object":"ADMIN","relation":"members"}}
+              ]
+              EOF
+              keto relation-tuple create /tmp/hierarchy.json \
+                --insecure-disable-transport-security \
+                --write-remote "{{ $ketoWrite }}:4467" \
+              && echo "Group hierarchy created." \
+              || echo "Hierarchy may already exist (expected on re-sync)."
+{{- end }}

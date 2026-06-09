@@ -1,0 +1,8 @@
+out/
+*.local.yaml
+*.local.tgz
+*.tgz
+charts/
+.idea/
+.vscode/
+node_modules/

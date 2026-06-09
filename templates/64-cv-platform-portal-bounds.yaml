@@ -1,0 +1,45 @@
+{{/*
+  Platform-layer admission fence on the portal SA.
+
+  Even though the portal's RBAC technically allows it to DELETE PVCs named
+  `data-postgres-0` cluster-wide, this VAP forbids the action in any cv-* or
+  system namespace. Combined with the application-layer ownership check, an
+  auth bug still can't delete data in cv-portal / cv-gitea / kube-system.
+*/}}
+{{- if include "cv.role.platform" . }}
+{{- $portalNs := include "cv.ns" (list $ "portal") }}
+{{- $portalSa := printf "system:serviceaccount:%s:portal" $portalNs }}
+{{- $nsPrefix := $.Values.namespacePrefix }}
+{{- $platformDenylistCEL := "['default','argocd','ingress-nginx','ingress-controller']" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-platform-portal-pvc-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["persistentvolumeclaims"]
+  matchConditions:
+    - name: only-portal-sa
+      expression: "request.userInfo.username == '{{ $portalSa }}'"
+  validations:
+    - expression: "!request.namespace.startsWith('{{ $nsPrefix }}') && !request.namespace.startsWith('kube-') && !(request.namespace in {{ $platformDenylistCEL }})"
+      messageExpression: "'Portal SA cannot delete PVCs in platform / system namespaces (got namespace=' + request.namespace + ').'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-platform-portal-pvc-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-platform-portal-pvc-bounds
+  validationActions: [Deny]
+{{- end }}

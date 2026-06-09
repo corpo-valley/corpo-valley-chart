@@ -1,0 +1,26 @@
+{{/*
+  All cv-* namespaces created up front so platform manifests can target them.
+  Each gets PSA labels matching the live deploy.
+*/}}
+{{- if include "cv.role.platform" . }}
+{{- range $name := list "ory" "portal" "gitea" "gitea-runners" "registry" "cloudflared" "platform" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "cv.ns" (list $ $name) }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    corpo-valley.com/tier: platform
+{{- end }}
+{{- end }}
+{{- if .Values.argocd.projectsArgocd.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "cv.ns" (list . .Values.argocd.projectsArgocd.nsLogical) }}
+  labels:
+    {{- include "cv.labels" . | nindent 4 }}
+    corpo-valley.com/tier: platform
+{{- end }}

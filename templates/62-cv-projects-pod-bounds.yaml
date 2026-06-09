@@ -1,0 +1,75 @@
+{{/*
+  Tenant pod-security baseline. Applies to every workload the projects-argocd
+  controller deploys. Blocks the node-escape primitives (privileged, hostPath,
+  hostNetwork/PID/IPC, hostPort, host-reaching capabilities) without forcing
+  runAsNonRoot or drop-ALL on tenant images.
+*/}}
+{{- if include "cv.role.tenants" . }}
+{{- $projectsArgocdNs := include "cv.ns" (list $ $.Values.argocd.projectsArgocd.nsLogical) }}
+{{- $controllerSa := printf "system:serviceaccount:%s:argocd-application-controller" $projectsArgocdNs }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-pod-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs", "cronjobs"]
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+  variables:
+    - name: podSpec
+      expression: >-
+        has(object.spec.template) ? object.spec.template.spec :
+        (has(object.spec.jobTemplate) ? object.spec.jobTemplate.spec.template.spec :
+        object.spec)
+    - name: allContainers
+      expression: >-
+        (has(variables.podSpec.containers) ? variables.podSpec.containers : []) +
+        (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers : []) +
+        (has(variables.podSpec.ephemeralContainers) ? variables.podSpec.ephemeralContainers : [])
+  validations:
+    - expression: "!has(variables.podSpec.hostNetwork) || variables.podSpec.hostNetwork == false"
+      message: "Tenant pods must not use hostNetwork."
+    - expression: "!has(variables.podSpec.hostPID) || variables.podSpec.hostPID == false"
+      message: "Tenant pods must not use hostPID."
+    - expression: "!has(variables.podSpec.hostIPC) || variables.podSpec.hostIPC == false"
+      message: "Tenant pods must not use hostIPC."
+    - expression: "!has(variables.podSpec.volumes) || variables.podSpec.volumes.all(v, !has(v.hostPath))"
+      message: "Tenant pods must not mount hostPath volumes."
+    - expression: "variables.allContainers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || c.securityContext.privileged == false)"
+      message: "Tenant containers must not be privileged."
+    - expression: "variables.allContainers.all(c, !has(c.ports) || c.ports.all(p, !has(p.hostPort)))"
+      message: "Tenant containers must not bind hostPort."
+    - expression: >-
+        variables.allContainers.all(c, !has(c.securityContext) || !has(c.securityContext.capabilities) ||
+        !has(c.securityContext.capabilities.add) ||
+        c.securityContext.capabilities.add.all(cap, !(cap in ['SYS_ADMIN','SYS_PTRACE','SYS_MODULE','SYS_RAWIO','SYS_BOOT','NET_ADMIN','NET_RAW','DAC_READ_SEARCH','DAC_OVERRIDE','ALL'])))
+      message: "Tenant containers must not add host/kernel-reaching Linux capabilities (e.g. SYS_ADMIN, NET_ADMIN, NET_RAW)."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-pod-bounds
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+spec:
+  policyName: cv-projects-pod-bounds
+  validationActions: [Deny]
+{{- end }}

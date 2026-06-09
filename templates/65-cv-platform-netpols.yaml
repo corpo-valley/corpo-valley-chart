@@ -1,0 +1,154 @@
+{{/*
+  Platform ingress NetworkPolicies. Make each sensitive service default-deny
+  except for legitimate callers:
+
+   - Node CIDR (kubelet probes + host-network components like nginx ingress)
+   - Platform namespaces that are real callers (cv-portal, cv-ory, etc.)
+   - Public ports (Kratos 4433, Hydra 4444, Oathkeeper-proxy 4455) open to all
+*/}}
+{{- if include "cv.role.platform" . }}
+{{- $oryNs := include "cv.ns" (list $ "ory") }}
+{{- $portalNs := include "cv.ns" (list $ "portal") }}
+{{- $giteaRunnersNs := include "cv.ns" (list $ "gitea-runners") }}
+{{- $registryNs := include "cv.ns" (list $ "registry") }}
+{{- $nodeCIDR := $.Values.cluster.nodeCIDR }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-keto-ingress
+  namespace: {{ $oryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-keto
+spec:
+  podSelector: { matchLabels: { app: ory-keto } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [{{ $portalNs }}, {{ $oryNs }}] }
+      ports: [{ protocol: TCP, port: 4466 }, { protocol: TCP, port: 4467 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-ory-postgres-ingress
+  namespace: {{ $oryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-postgres
+spec:
+  podSelector: { matchLabels: { app: ory-postgres } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [{{ $oryNs }}, {{ $portalNs }}] }
+      ports: [{ protocol: TCP, port: 5432 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-kratos-ingress
+  namespace: {{ $oryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-kratos
+spec:
+  podSelector: { matchLabels: { app: ory-kratos } }
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 4433 }]
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [{{ $portalNs }}, {{ $oryNs }}] }
+      ports: [{ protocol: TCP, port: 4434 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-hydra-ingress
+  namespace: {{ $oryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-hydra
+spec:
+  podSelector: { matchLabels: { app: ory-hydra } }
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 4444 }]
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [{{ $portalNs }}, {{ $oryNs }}] }
+      ports: [{ protocol: TCP, port: 4445 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-oathkeeper-ingress
+  namespace: {{ $oryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: ory-oathkeeper
+spec:
+  podSelector: { matchLabels: { app: ory-oathkeeper } }
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 4455 }]
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [{{ $portalNs }}, {{ $oryNs }}] }
+      ports: [{ protocol: TCP, port: 4456 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-registry-ingress
+  namespace: {{ $registryNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: registry
+spec:
+  podSelector: { matchLabels: { app: registry } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $giteaRunnersNs }} } }
+      ports: [{ protocol: TCP, port: 5000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-portal-ingress
+  namespace: {{ $portalNs }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: portal
+spec:
+  podSelector: { matchLabels: { app: portal } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    # ingress controller (external + MCP traffic) + Build pin callback. Kratos
+    # no longer calls the portal — provisioning moved in-portal.
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}] }
+      ports: [{ protocol: TCP, port: 3000 }]
+    # same-namespace mcp-gateway → portal /internal ownership check
+    - from:
+        - { podSelector: { matchLabels: { app: mcp-gateway } } }
+      ports: [{ protocol: TCP, port: 3000 }]
+{{- end }}
