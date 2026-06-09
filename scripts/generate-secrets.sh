@@ -48,6 +48,7 @@ mkdir -p "$OUT/plain"
 $SEAL && mkdir -p "$OUT/sealed"
 
 rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-32}"; }
+randb64() { openssl rand -base64 32 | tr -d '\n'; }  # exactly 32 bytes, base64 — AES-256 keys
 
 if [[ -n "$RESTORE_ENV" ]]; then
   # shellcheck source=/dev/null
@@ -67,6 +68,8 @@ fi
 : "${GITEA_SECRET_KEY:=$(rand 64)}"
 : "${GITEA_INTERNAL_TOKEN:=$(rand 105)}"
 : "${GITEA_ADMIN_TOKEN:=unset-mint-post-install}"
+: "${PORTAL_SECRET_KEY:=$(randb64)}"        # base64 32 bytes — AES-256, portal refuses to boot otherwise
+: "${INTERNAL_WEBHOOK_SECRET:=$(rand 48)}"
 
 cat >"$OUT/secrets.local.env" <<EOF
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
@@ -82,6 +85,8 @@ GITEA_CLIENT_SECRET=$GITEA_CLIENT_SECRET
 GITEA_SECRET_KEY=$GITEA_SECRET_KEY
 GITEA_INTERNAL_TOKEN=$GITEA_INTERNAL_TOKEN
 GITEA_ADMIN_TOKEN=$GITEA_ADMIN_TOKEN
+PORTAL_SECRET_KEY=$PORTAL_SECRET_KEY
+INTERNAL_WEBHOOK_SECRET=$INTERNAL_WEBHOOK_SECRET
 EOF
 
 emit_secret() {
@@ -148,6 +153,10 @@ emit_secret ory-hydra-clients "$NS_ORY" \
 
 emit_secret portal-db "$NS_PORTAL" \
   DATABASE_URL "postgres://portal:${PORTAL_PASSWORD}@${PG_HOST}:5432/portal?sslmode=disable"
+
+emit_secret portal-platform-secrets "$NS_PORTAL" \
+  PORTAL_SECRET_KEY       "$PORTAL_SECRET_KEY" \
+  INTERNAL_WEBHOOK_SECRET "$INTERNAL_WEBHOOK_SECRET"
 
 emit_secret gitea-admin "$NS_PORTAL" \
   GITEA_URL "http://gitea.${NS_GITEA}.svc.cluster.local" \

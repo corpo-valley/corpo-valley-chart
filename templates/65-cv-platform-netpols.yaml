@@ -140,9 +140,15 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    # ingress controller (external + MCP traffic) + Build pin callback. Kratos
+    # no longer calls the portal — provisioning moved in-portal.
     - from:
         - namespaceSelector:
             matchExpressions:
-              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $oryNs }}, {{ $giteaRunnersNs }}] }
+              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}] }
+      ports: [{ protocol: TCP, port: 3000 }]
+    # same-namespace mcp-gateway → portal /internal ownership check
+    - from:
+        - { podSelector: { matchLabels: { app: mcp-gateway } } }
       ports: [{ protocol: TCP, port: 3000 }]
 {{- end }}

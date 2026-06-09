@@ -50,9 +50,11 @@ image:
   # workload's namespace; the chart does NOT create it (use kubectl create
   # secret docker-registry, or a sealed secret).
   pullSecret: ghcr-pull-secret
+  # Keys are the literal image/component names (they complete
+  # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
   tags:
     portal: latest
-    mcpGateway: latest
+    mcp-gateway: latest
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
 # This is the deployment repo that ArgoCD reconciles to keep the chart's
@@ -102,6 +104,11 @@ cluster:
   serviceCIDR: 10.152.183.0/24
   nodeCIDR: 192.168.87.0/24
   sealedSecretsControllerUrl: http://sealed-secrets-controller.kube-system.svc.cluster.local:8080/v1/cert.pem
+  # SPKI sha256 pin of the sealed-secrets controller cert. REQUIRED for
+  # project-secret sealing: the portal runs NODE_ENV=production and refuses
+  # trust-on-first-use without an explicit pin. Get it after the controller
+  # is up:   ./scripts/print-cert-pin.sh
+  sealedSecretsCertSha256: ""
 
 # Resources for each platform component (mirror the current deploy).
 resources:
@@ -170,7 +177,9 @@ argocd:
     enabled: true
     nsLogical: projects-argocd    # final ns is namespacePrefix + this
     appProject: projects
-  trustedClientIds: argocd,gitea
+  # Hydra clients that skip the consent screen. claude-code-mcp is the client
+  # MCP tooling (Claude Code / Cursor / Codex) uses to drive the MCP server.
+  trustedClientIds: argocd,gitea,claude-code-mcp
   disableSubmoduleInit: true
 
 # MCP gateway. publicUrl defaults to https://<hosts.mcp>.

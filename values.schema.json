@@ -98,7 +98,12 @@
         "podCIDR":     { "type": "string" },
         "serviceCIDR": { "type": "string" },
         "nodeCIDR":    { "type": "string" },
-        "sealedSecretsControllerUrl": { "type": "string" }
+        "sealedSecretsControllerUrl": { "type": "string" },
+        "sealedSecretsCertSha256": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{64})?$",
+          "description": "SPKI sha256 pin of the sealed-secrets controller cert (lowercase hex, from scripts/print-cert-pin.sh). Empty omits the pin env, which disables project-secret sealing in production images."
+        }
       }
     },
     "resources": {

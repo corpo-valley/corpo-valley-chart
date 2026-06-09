@@ -285,6 +285,30 @@ spec:
               value: {{ $.Values.cluster.nodeCIDR | quote }}
             - name: SEALED_SECRETS_CONTROLLER_URL
               value: {{ $.Values.cluster.sealedSecretsControllerUrl | quote }}
+            # Security hardening (NODE_ENV=production images fail closed without these):
+            #   PORTAL_SECRET_KEY        — AES-256 key (base64, 32 bytes) that encrypts
+            #                              per-project Postgres passwords at rest; the
+            #                              portal refuses to boot without it.
+            #   INTERNAL_WEBHOOK_SECRET  — authenticates /internal callers (mcp-gateway
+            #                              ownership check, Build pin callback).
+            - name: PORTAL_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: portal-platform-secrets, key: PORTAL_SECRET_KEY }
+            - name: INTERNAL_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: { name: portal-platform-secrets, key: INTERNAL_WEBHOOK_SECRET }
+            {{- if $.Values.cluster.sealedSecretsCertSha256 }}
+            # Pins the sealed-secrets controller key (SPKI sha256). In production the
+            # portal refuses trust-on-first-use, so project-secret sealing is dead
+            # until this is set. See README "Pinning the sealed-secrets cert".
+            - name: SEALED_SECRETS_CERT_SHA256
+              value: {{ $.Values.cluster.sealedSecretsCertSha256 | quote }}
+            {{- end }}
+            # MCP audience enforcement (RFC 8707 resource indicators). Off until MCP
+            # clients are confirmed sending resource indicators; foreign-resource
+            # tokens are rejected even when off.
+            - name: MCP_ENFORCE_AUDIENCE
+              value: {{ $.Values.mcp.enforceAudience | quote }}
           resources:
             {{- toYaml $.Values.resources.portal | nindent 12 }}
           livenessProbe:

@@ -41,6 +41,17 @@ spec:
               value: "https://{{ $oauthHost }}"
             - name: PROJECTS_DOMAIN
               value: {{ include "cv.projectsHostSuffix" $ | quote }}
+            # Per-request project-ownership check (hardened image): the gateway
+            # asks the portal who owns the host slug and fails CLOSED (403 on
+            # every /mcp request) without these. PORTAL_INTERNAL_URL must hit the
+            # portal Service (port 80), not the code default :3000.
+            - name: INTERNAL_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: { name: portal-platform-secrets, key: INTERNAL_WEBHOOK_SECRET }
+            - name: PORTAL_INTERNAL_URL
+              value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
+            - name: MCP_ENFORCE_AUDIENCE
+              value: {{ $.Values.mcp.enforceAudience | quote }}
           resources:
             {{- toYaml $.Values.resources.mcpGateway | nindent 12 }}
           securityContext:

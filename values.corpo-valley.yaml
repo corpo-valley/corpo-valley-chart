@@ -8,9 +8,10 @@ namespacePrefix: cv-
 image:
   registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
+  # Pinned to the live deploy (k8s/platform/*.yaml in hashtagcyber/corpo-valley).
   tags:
-    portal: latest
-    mcpGateway: latest
+    portal: 20260609-8589d7b
+    mcp-gateway: 20260609-1f5c5d4
 
 git:
   platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
@@ -34,6 +35,8 @@ cluster:
   podCIDR: 10.1.0.0/16
   serviceCIDR: 10.152.183.0/24
   nodeCIDR: 192.168.87.0/24
+  # SPKI sha256 of the live cluster's sealed-secrets controller cert.
+  sealedSecretsCertSha256: a9d59cf74dba2c8a816c2e8def601018ba6f2c4c1dd6146c74857c286f21aebc
 
 scale:
   giteaRunner: 1

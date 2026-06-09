@@ -69,6 +69,17 @@ SMTP connection URI for Kratos courier mail.
 |---|---|
 | `DATABASE_URL` | `postgres://portal:$PORTAL_PASSWORD@ory-postgres.<prefix>ory.svc.cluster.local:5432/portal?sslmode=disable` |
 
+### `portal-platform-secrets` in `<prefix>portal`
+
+Security-hardening secrets. The portal runs `NODE_ENV=production` and fails
+closed without them; the mcp-gateway 403s every `/mcp` request without the
+webhook secret.
+
+| Key | Value |
+|---|---|
+| `PORTAL_SECRET_KEY` | base64-encoded **exactly 32 bytes** (`openssl rand -base64 32`) — AES-256 key that encrypts per-project Postgres passwords at rest. The portal refuses to boot without it. To rotate: set the new key plus `PORTAL_SECRET_KEY_OLD` and restart; drop the old once migrated. |
+| `INTERNAL_WEBHOOK_SECRET` | random 32+ char string — authenticates `/internal` callers (`X-Internal-Secret` header). Shared with the mcp-gateway for its per-request project-ownership check. |
+
 ### `gitea-admin` in `<prefix>portal`
 
 The portal uses this to provision Gitea users + repos on its tenants' behalf.

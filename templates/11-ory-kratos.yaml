@@ -1,9 +1,7 @@
 {{- if include "cv.role.platform" . }}
 {{- $ns := include "cv.ns" (list $ "ory") }}
-{{- $portalSvc := include "cv.svc" (list $ "portal" "portal") }}
 {{- $portalHost := include "cv.host" (list $ "portal") }}
 {{- $authHost := include "cv.host" (list $ "auth") }}
-{{- $ketoWrite := include "cv.svc" (list $ "ory-keto-write" "ory") }}
 {{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
 ---
 apiVersion: v1
@@ -47,32 +45,26 @@ data:
           passwordless_enabled: true
         link:
           enabled: true
+        # Self-service profile editing is DISABLED: users must not change their
+        # own traits (email / username / name) — only an admin can, via the admin
+        # API (portal /admin/users). With this off, the settings flow offers only
+        # the password method; a direct POST of `method=profile` to the settings
+        # flow is rejected. The admin API (patchIdentity) is unaffected.
+        profile:
+          enabled: false
 
       flows:
         login:
           ui_url: https://{{ $portalHost }}/login
           lifespan: 10m
         registration:
-          ui_url: https://{{ $portalHost }}/registration
+          # Self-service registration is DISABLED — accounts are created only by
+          # an admin (portal /admin/users), which provisions the EVERYONE grant +
+          # paired .bot identity + Gitea accounts synchronously. The first admin
+          # is bootstrapped post-install (see scripts/bootstrap-admin.sh).
+          enabled: false
+          ui_url: https://{{ $portalHost }}/login
           lifespan: 10m
-          after:
-            hooks:
-              - hook: web_hook
-                config:
-                  url: http://{{ $ketoWrite }}:4467/admin/relation-tuples
-                  method: PUT
-                  body: file:///etc/kratos/config/everyone-grant.jsonnet
-                  can_interrupt: false
-                  response:
-                    ignore: true
-              - hook: web_hook
-                config:
-                  url: http://{{ $portalSvc }}:80/internal/kratos/after-registration
-                  method: POST
-                  body: file:///etc/kratos/config/bot-create-webhook.jsonnet
-                  can_interrupt: false
-                  response:
-                    ignore: true
         verification:
           ui_url: https://{{ $portalHost }}/verification
           enabled: true
@@ -155,21 +147,6 @@ data:
         }
       }
     }
-  everyone-grant.jsonnet: |
-    function(ctx) {
-      namespace: "groups",
-      object: "EVERYONE",
-      relation: "members",
-      subject_id: ctx.identity.id,
-    }
-  bot-create-webhook.jsonnet: |
-    function(ctx) {
-      identity: {
-        id: ctx.identity.id,
-        traits: ctx.identity.traits,
-        metadata_public: if std.objectHas(ctx.identity, "metadata_public") then ctx.identity.metadata_public else {},
-      },
-    }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -192,7 +169,8 @@ spec:
       labels:
         app: ory-kratos
       annotations:
-        config-revision: "2026-05-27-mvp1-init"
+        # Restart the pod whenever the mounted Kratos config changes.
+        config-revision: "2026-06-09-disable-profile-method"
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
@@ -251,9 +229,7 @@ spec:
           configMap:
             name: ory-kratos-config
             items:
-              - { key: kratos.yaml,                path: kratos.yaml }
-              - { key: everyone-grant.jsonnet,     path: everyone-grant.jsonnet }
-              - { key: bot-create-webhook.jsonnet, path: bot-create-webhook.jsonnet }
+              - { key: kratos.yaml, path: kratos.yaml }
         - name: schemas
           configMap:
             name: ory-kratos-config

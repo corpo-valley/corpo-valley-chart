@@ -46,17 +46,27 @@ end-to-end. The rest of this README explains the chart itself.
 
 kubectl apply -f ./out/secrets/sealed/
 
-# 2. Install the chart.
-helm install corpo-valley . \
-  --set domain=corpo-valley.com \
-  --set cloudflare.tunnelId=eb36fca0-1f28-4556-b313-f2d823e7cff2 \
-  -f values.example.yaml
+# 2. Copy values.example.yaml, fill in your domain / CIDRs / storage class,
+#    and pin the sealed-secrets cert (required for project-secret sealing):
+./scripts/print-cert-pin.sh   # -> cluster.sealedSecretsCertSha256 in your values
 
-# 3. Post-install (one-shot, not chart-managed):
+# 3. Install the chart.
+helm install corpo-valley . \
+  --set cloudflare.tunnelId=<uuid-from-cloudflared-tunnel-create> \
+  -f my-values.yaml
+
+# 4. Post-install (one-shot, not chart-managed):
 #    - Create the cvportal Gitea site-admin user + token.
 #    - Register the "CorpoValley" Gitea OIDC auth source.
 #    - Patch argocd-repo-server: ARGOCD_GIT_MODULES_ENABLED=false.
 #    The hetzner repo's bootstrap.sh handles all three idempotently.
+
+# 5. Bootstrap the first platform admin. Self-service registration is
+#    disabled by design, so the first account is created against the Kratos
+#    admin API and granted the ADMIN tier; it prints a one-time recovery
+#    link to set your password. Every later user is created in the portal
+#    UI at /admin/users.
+./scripts/bootstrap-admin.sh --email you@example.com --username you
 ```
 
 ## Configuration
@@ -84,11 +94,13 @@ current `corpo-valley.com` deployment.
 | `storage.oryPostgres` / `gitea` / `registry` | `5Gi` / `10Gi` / `50Gi` | Per-PVC sizes. |
 | `cluster.podCIDR` / `serviceCIDR` / `nodeCIDR` | matches the live deploy | Used by the per-project egress NetworkPolicies emitted by the portal. |
 | `cluster.sealedSecretsControllerUrl` | in-cluster default | The portal fetches the public cert from here to seal project secrets. |
+| `cluster.sealedSecretsCertSha256` | `""` | SPKI sha256 pin of the controller cert (`scripts/print-cert-pin.sh`). **Required** for project-secret sealing — production portal images refuse trust-on-first-use. |
 | `resources.<component>.requests` / `limits` | matches the live deploy | Per-component resources. |
 | `giteaRunner.replicas` | `1` | Bump for build concurrency. |
 | `argocd.projectsArgocd.enabled` / `nsLogical` / `appProject` | `true` / `projects-argocd` / `projects` | The projects-ArgoCD wiring the chart expects. |
-| `argocd.trustedClientIds` | `argocd,gitea` | Hydra clients that bypass the consent screen. |
+| `argocd.trustedClientIds` | `argocd,gitea,claude-code-mcp` | Hydra clients that bypass the consent screen. |
 | `mcp.publicUrl` | `https://<hosts.mcp>` | What RFC 9728 protected-resource metadata announces. |
+| `mcp.enforceAudience` | `false` | RFC 8707 audience enforcement on MCP tokens (portal + gateway). Enable once your MCP clients send resource indicators. |
 
 See `values.schema.json` for the full constrained schema. `helm install`
 validates inputs against it.
@@ -110,6 +122,8 @@ These have to be done after `helm install`:
 
 - `cvportal` Gitea site-admin user + token (Gitea CLI).
 - `CorpoValley` Gitea OIDC auth source (Gitea CLI).
+- The first platform admin (`scripts/bootstrap-admin.sh`) — self-service
+  registration is disabled, all accounts are admin-created.
 - `ARGOCD_GIT_MODULES_ENABLED=false` on `argocd-repo-server` (only if you use
   submodules elsewhere and want ArgoCD to skip them).
 - Node-side registry routing (`/etc/hosts` + containerd certs.d) so kubelet
@@ -156,6 +170,8 @@ templates/
   65-cv-platform-netpols.yaml           # ingress NetworkPolicies on platform svcs
 scripts/
   generate-secrets.sh   # mints + optionally seals every Secret the chart needs
+  print-cert-pin.sh     # SPKI sha256 pin for cluster.sealedSecretsCertSha256
+  bootstrap-admin.sh    # creates the first platform admin (registration is disabled)
 values.example.yaml     # an anonymized template you can copy
 values.corpo-valley.yaml # the values for the current corpo-valley.com deploy
 SEALED_SECRETS.md       # what secrets to provision, with what keys

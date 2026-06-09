@@ -24,9 +24,10 @@ image:
   registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   # Pin tags here once the cluster is stable; latest is fine while iterating.
+  # Keys are the literal image names: portal, mcp-gateway.
   tags:
     portal: latest
-    mcpGateway: latest
+    mcp-gateway: latest
 
 git:
   # The deployment repo ArgoCD reconciles. Usually corpo-valley-hetzner.
@@ -58,6 +59,11 @@ cluster:
   podCIDR: 10.42.0.0/16        # k3s default
   serviceCIDR: 10.43.0.0/16    # k3s default
   nodeCIDR: 10.0.0.0/24        # Hetzner private network range, adjust
+  # SPKI sha256 pin of your sealed-secrets controller cert. Required for the
+  # portal to seal per-project secrets (production images refuse
+  # trust-on-first-use). Once the controller is up, fill in the output of:
+  #   ./scripts/print-cert-pin.sh
+  sealedSecretsCertSha256: ""
 
 # Override per-component resources here. Defaults mirror corpo-valley.com.
 # resources:
