@@ -8,16 +8,18 @@
     Gitea-hosted repos and tenant namespaces.
 
   Neither manifest installs ArgoCD itself — the chart assumes the cluster
-  already runs a platform ArgoCD (in `argocd`) and a projects ArgoCD (in
-  cv-projects-argocd). The hetzner bootstrap installs both as prereqs.
+  already runs a platform ArgoCD (in `argocd`, optional) and a projects
+  ArgoCD (in cv-projects-argocd). See the README install steps.
 */}}
 {{- if include "cv.role.platform" . }}
 {{- $projectsArgocdNs := include "cv.ns" (list $ $.Values.argocd.projectsArgocd.nsLogical) }}
 {{- $giteaSvc := include "cv.svc" (list $ "gitea" "gitea") }}
+{{- if $.Values.git.platformRepoUrl }}
 ---
 # Platform AppProject. Bootstrap manifest — applied alongside this chart, not
 # managed by ArgoCD itself (to avoid the chicken-and-egg of the project
 # managing the very project rule that authorizes its own Application).
+# Rendered only when git.platformRepoUrl is set (i.e. you GitOps the platform).
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -38,6 +40,7 @@ spec:
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
     - { group: rbac.authorization.k8s.io, kind: ClusterRole }
     - { group: rbac.authorization.k8s.io, kind: ClusterRoleBinding }
+{{- end }}
 {{- if $.Values.argocd.projectsArgocd.enabled }}
 ---
 # Projects AppProject. Lives in the projects-argocd namespace so the projects

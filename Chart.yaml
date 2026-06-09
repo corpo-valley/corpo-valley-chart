@@ -16,7 +16,7 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "MVP7"
 
 home: https://github.com/corpo-valley/corpo-valley-main
@@ -40,6 +40,6 @@ keywords:
 annotations:
   artifacthub.io/changes: |
     - kind: changed
-      description: Sync with the hardened platform — Kratos self-service registration/profile disabled, portal + mcp-gateway hardening env (portal-platform-secrets, sealed-secrets cert pin, MCP audience flag), portal NetworkPolicy caller update
+      description: Standalone install — README now carries the full cluster-to-running runbook; git.platformRepoUrl is optional (empty skips the platform AppProject); external deployment-repo references removed
     - kind: added
-      description: scripts/bootstrap-admin.sh (first platform admin) and scripts/print-cert-pin.sh (sealed-secrets SPKI pin)
+      description: scripts/post-install.sh (Gitea admin/token, OIDC source, runner token, ArgoCD patch) and scripts/setup-node-registry.sh (per-node registry pull routing, microk8s + k3s)

@@ -9,8 +9,9 @@ secrets out-of-band before running `helm install` — either as plain `Secret`
 manifests (fine for testing), sealed with `kubeseal` (production), or fetched
 by an operator like External Secrets (Phase 2).
 
-The accompanying `corpo-valley-hetzner` deployment repo automates the sealing
-flow per cluster.
+`scripts/generate-secrets.sh` in this repo automates the whole flow: it mints
+every secret below and optionally seals each one against your cluster's
+controller.
 
 ## Expected secrets
 
@@ -83,7 +84,7 @@ webhook secret.
 ### `gitea-admin` in `<prefix>portal`
 
 The portal uses this to provision Gitea users + repos on its tenants' behalf.
-The token is minted post-install (see `bootstrap-job` in the deployment repo).
+The token is minted post-install by `scripts/post-install.sh`.
 
 | Key | Value |
 |---|---|
@@ -122,19 +123,20 @@ sealed). Skip if your images are public.
 
 ## Generation flow
 
-The deployment repo ships `scripts/generate-secrets.sh` which:
+This repo ships `scripts/generate-secrets.sh` which:
 
-1. Reads a `secrets.env` (KEY=VALUE) of operator-supplied inputs (SMTP user
-   + password, Cloudflare tunnel UUID).
+1. Takes operator-supplied inputs as flags (`--smtp-uri`,
+   `--cloudflare-credentials`).
 2. Generates random per-deployment values (Postgres passwords, Hydra/Kratos
    system secrets) — written to `./out/secrets.local.env` so you can
-   regenerate `DSN_*` etc. without losing entropy.
-3. Renders each `Secret` to a tmp file.
-4. Pipes each through `kubeseal --controller-name=sealed-secrets-controller
+   regenerate `DSN_*` etc. without losing entropy (`--restore-env`).
+3. Renders each `Secret` to `./out/secrets/plain/<name>.yaml`.
+4. With `--seal`, pipes each through `kubeseal
+   --controller-name=sealed-secrets-controller
    --controller-namespace=kube-system -o yaml` and writes
-   `./out/sealed/<name>.sealed.yaml`.
-5. The operator commits `./out/sealed/` into the deployment repo under
-   `clusters/<cluster>/sealed/`.
+   `./out/secrets/sealed/<name>.sealed.yaml`.
+5. You apply the sealed YAMLs (and may safely commit them to your own
+   deployment repo — only your cluster's controller can decrypt them).
 
 The sealed YAMLs land in the right namespace because the secrets templates
 hardcode them.
@@ -143,14 +145,14 @@ hardcode them.
 
 A SealedSecret is encrypted against the controller's master RSA key. If you
 lose the key, the sealed yamls become unusable and every secret must be
-re-sealed against a new key. The deployment repo's bootstrap captures the
-controller key on first run:
+re-sealed against a new key. Capture the controller key right after
+installing the controller:
 
     kubectl get secrets -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key \
       -o yaml > sealed-secrets-master.local.yaml
 
 Store that file somewhere SAFE (encrypted backup, password manager export,
-SOPS-encrypted in the deployment repo). To restore on a new cluster:
+SOPS-encrypted — never in plain git). To restore on a new cluster:
 
     kubectl apply -f sealed-secrets-master.local.yaml
     kubectl delete pod -n kube-system -l app.kubernetes.io/name=sealed-secrets

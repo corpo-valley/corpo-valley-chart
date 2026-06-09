@@ -57,13 +57,14 @@ image:
     mcp-gateway: latest
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
-# This is the deployment repo that ArgoCD reconciles to keep the chart's
-# rendered output in the cluster — corpo-valley-hetzner, or whatever
-# deployment shape you're running. NOT corpo-valley-main (that's the image
-# build repo, not a deploy target) and NOT corpo-valley-chart (the chart
-# is consumed via Helm, not git-synced as raw YAML).
+# Only needed if you GitOps the platform itself: point it at YOUR deployment
+# repo (the one ArgoCD reconciles to keep the rendered chart in the cluster).
+# NOT corpo-valley-main (image build repo) and NOT corpo-valley-chart (the
+# chart is consumed via Helm, not git-synced as raw YAML). Leave empty to
+# skip rendering the platform AppProject entirely — `helm install` alone
+# does not require it.
 git:
-  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  platformRepoUrl: ""
   platformRepoBranch: main
 
 # Cloudflare tunnel. The tunnel ID + creds JSON are supplied via a sealed

@@ -13,8 +13,9 @@ image:
     portal: 20260609-8589d7b
     mcp-gateway: 20260609-1f5c5d4
 
+# What the live platform ArgoCD AppProject actually scopes to.
 git:
-  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley.git
   platformRepoBranch: main
 
 cloudflare:
