@@ -23,8 +23,8 @@ resources:
     limits:   { cpu: 2, memory: 4Gi }
 ```
 
-Then bump the cluster: the 2-VM CCX23 (8 dedicated vCPU / 32 GiB) topology in
-`corpo-valley-hetzner` handles 100 active users with ~50% headroom. Beyond
+Then bump the cluster: a 2-VM topology with 8 dedicated vCPU / 32 GiB total
+(e.g. 2× Hetzner CCX23) handles 100 active users with ~50% headroom. Beyond
 ~300 active users, add a third node — see "Cluster-side scaling" below.
 
 ## Stateless components
@@ -132,15 +132,14 @@ The chart sizes pods; the cluster has to hold them.
 | User count | Cluster shape | Why |
 |---|---|---|
 | < 25 | 1× CCX23 (4 vCPU / 16 GiB) | Single-node fits the platform + a handful of projects |
-| 25–100 | 2× CCX23 (8 vCPU / 32 GiB total) | Hetzner Phase 1 — server + agent, current default |
+| 25–100 | 2× CCX23 (8 vCPU / 32 GiB total) | server + agent, current default |
 | 100–300 | 3× CCX23 (12 vCPU / 48 GiB) | Adds genuine HA — losing the agent isn't fatal; losing the server still is |
 | 300+ | k3s → kubeadm/k0s, 3 control-plane + 3+ workers | etcd HA, Postgres operator with replicas, registry on S3 — the Phase 2 rewrite |
 
 The **default kubelet pod cap is 110 pods/node**. At 200 active projects
-(~3 pods each + platform overhead), one node hits the cap. The k3s install
-in `corpo-valley-hetzner/README.md` raises this to 250 — but only the OS-
-side. If you migrate to a different distro, set `--max-pods=250` (or
-higher) on every kubelet.
+(~3 pods each + platform overhead), one node hits the cap. On k3s, raise it
+with `--kubelet-arg=max-pods=250` in the k3s install args; on other distros,
+set `--max-pods=250` (or higher) on every kubelet.
 
 ## What's NOT a scaling problem
 

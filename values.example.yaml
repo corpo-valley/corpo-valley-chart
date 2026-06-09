@@ -1,8 +1,8 @@
 # corpo-valley chart — example values for a new deployment.
 #
-# Copy this to your own values file (or to corpo-valley-hetzner/clusters/<name>/values.yaml)
-# and fill in the placeholder values. Everything else falls back to defaults
-# in values.yaml that reproduce the current corpo-valley.com deployment.
+# Copy this to your own values file and fill in the placeholder values.
+# Everything else falls back to defaults in values.yaml that reproduce the
+# current corpo-valley.com deployment.
 
 role: all-in-one
 
@@ -30,8 +30,10 @@ image:
     mcp-gateway: latest
 
 git:
-  # The deployment repo ArgoCD reconciles. Usually corpo-valley-hetzner.
-  platformRepoUrl: git@github.com:corpo-valley/corpo-valley-hetzner.git
+  # Optional: only if you GitOps the platform itself. Point at YOUR deployment
+  # repo and ArgoCD will scope the corpo-valley AppProject to it. Leave empty
+  # for a plain `helm install` (the AppProject is skipped).
+  platformRepoUrl: ""
   platformRepoBranch: main
 
 cloudflare:

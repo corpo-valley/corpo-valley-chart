@@ -19,55 +19,116 @@ Phase 1. The chart targets `role: all-in-one` — one cluster, one platform
 instance. `role: platform` / `role: tenants` are scaffolded for a future
 platform/tenants cluster split but are not fully wired yet.
 
-## Quick start
+## Install — from a deployed cluster to a running Corpo Valley
 
-Assumes a fresh cluster with:
+Start point: a working Kubernetes cluster (any distro; microk8s and k3s are
+the tested ones) with a default-able RWO storage class, plus on your
+workstation: `kubectl`, `helm`, `kubeseal`, `cloudflared`, `jq`, `openssl`.
+You also need a domain on Cloudflare (traffic ingresses via a Cloudflare
+tunnel) and SMTP credentials for account-recovery email.
 
-- An nginx ingress controller in namespace `ingress` (or override
-  `ingress.className`)
-- A bitnami sealed-secrets controller in `kube-system`
-- A platform ArgoCD in `argocd` (optional if applying via plain
-  `kubectl apply`; required if you want GitOps reconciliation)
-- A projects ArgoCD in `cv-projects-argocd` (or whatever
-  `argocd.projectsArgocd.nsLogical` you set)
+### 1. Cluster prereqs (one-time)
 
-The companion repo
-[corpo-valley-hetzner](https://github.com/corpo-valley/corpo-valley-hetzner)
-provisions those prereqs on a 2-VM Hetzner cluster and runs the full install
-end-to-end. The rest of this README explains the chart itself.
+The chart deploys only Corpo Valley itself; these four things must exist
+first:
 
 ```bash
-# 1. Provision the secrets the chart references (see SEALED_SECRETS.md).
+# sealed-secrets controller (kube-system)
+kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.27.1/controller.yaml
+kubectl -n kube-system rollout status deploy/sealed-secrets-controller --timeout=120s
+
+# !! Back up the sealing master key NOW — without it your sealed secrets are
+# !! unrecoverable on a rebuilt cluster. Store it encrypted, never in plain git.
+kubectl get secrets -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key \
+  -o yaml > sealed-secrets-master.local.yaml
+
+# nginx ingress controller, in namespace `ingress`.
+# fullnameOverride=ingress makes the Service `ingress-controller`, which is
+# where the chart's cloudflared config sends all tunnel traffic.
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  -n ingress --create-namespace --set fullnameOverride=ingress \
+  --set controller.kind=Deployment --set controller.replicaCount=2
+
+# projects ArgoCD — a dedicated, namespace-scoped ArgoCD that deploys tenant
+# projects. The chart's VAPs fence in what it may do.
+kubectl create namespace cv-projects-argocd
+kubectl apply -n cv-projects-argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.3/manifests/namespace-install.yaml
+
+# (optional) platform ArgoCD in `argocd` — only if you want the platform
+# itself GitOps-reconciled. A plain `helm install` works without it; if you
+# add it, set git.platformRepoUrl in your values to your deployment repo.
+```
+
+### 2. Cloudflare tunnel + DNS
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create corpo-valley   # note the UUID; keeps credentials.json
+cloudflared tunnel route dns corpo-valley '*.example.com'
+cloudflared tunnel route dns corpo-valley '*.projects.example.com'
+```
+
+Those two wildcards cover everything the platform serves: `portal.`, `auth.`,
+`oauth.`, `gitea.`, `mcp.` and the per-project `<name>.projects.` hosts. The
+chart runs cloudflared in-cluster; you only supply the tunnel UUID (values)
+and `credentials.json` (secret, next step).
+
+### 3. Generate + apply secrets
+
+```bash
 ./scripts/generate-secrets.sh \
   --namespace-prefix cv- \
   --smtp-uri 'smtps://USER:PASS@smtp.example.com:465/' \
-  --cloudflare-credentials ./tunnel-credentials.json \
+  --cloudflare-credentials ~/.cloudflared/<TUNNEL_UUID>.json \
   --seal --output ./out/secrets
 
 kubectl apply -f ./out/secrets/sealed/
+```
 
-# 2. Copy values.example.yaml, fill in your domain / CIDRs / storage class,
-#    and pin the sealed-secrets cert (required for project-secret sealing):
-./scripts/print-cert-pin.sh   # -> cluster.sealedSecretsCertSha256 in your values
+`SEALED_SECRETS.md` documents every secret if you'd rather provision them
+another way. Keep `out/secrets/secrets.local.env` somewhere safe.
 
-# 3. Install the chart.
+### 4. Write your values + install
+
+```bash
+cp values.example.yaml my-values.yaml
+# Edit: domain, cluster CIDRs (must match your CNI!), storage.className,
+# email.fromAddress — and the sealed-secrets cert pin:
+./scripts/print-cert-pin.sh   # -> cluster.sealedSecretsCertSha256
+
 helm install corpo-valley . \
-  --set cloudflare.tunnelId=<uuid-from-cloudflared-tunnel-create> \
+  --set cloudflare.tunnelId=<TUNNEL_UUID> \
   -f my-values.yaml
+```
 
-# 4. Post-install (one-shot, not chart-managed):
-#    - Create the cvportal Gitea site-admin user + token.
-#    - Register the "CorpoValley" Gitea OIDC auth source.
-#    - Patch argocd-repo-server: ARGOCD_GIT_MODULES_ENABLED=false.
-#    The hetzner repo's bootstrap.sh handles all three idempotently.
+### 5. Post-install bootstrap
 
-# 5. Bootstrap the first platform admin. Self-service registration is
-#    disabled by design, so the first account is created against the Kratos
-#    admin API and granted the ADMIN tier; it prints a one-time recovery
-#    link to set your password. Every later user is created in the portal
-#    UI at /admin/users.
+```bash
+# Creates the cvportal Gitea site-admin + token, registers the CorpoValley
+# OIDC auth source, mints the Actions runner registration token, and patches
+# the platform ArgoCD (if present). Idempotent — re-run freely.
+./scripts/post-install.sh --domain example.com
+
+# On EVERY node: lets kubelet pull project images from the in-cluster
+# registry (plain-HTTP, ClusterIP-only). Detects microk8s/k3s.
+sudo ./scripts/setup-node-registry.sh
+```
+
+### 6. First admin + verify
+
+```bash
+# Self-service registration is disabled by design — the first account is
+# created against the Kratos admin API and granted the ADMIN tier. Prints a
+# one-time recovery link to set your password.
 ./scripts/bootstrap-admin.sh --email you@example.com --username you
 ```
+
+Open `https://portal.example.com`, finish the recovery flow, log in, and
+create a project from the dashboard. When its pipeline goes green at
+`https://<project>.projects.example.com`, you're running. Every further user
+is created in the portal at `/admin/users`.
 
 ## Configuration
 
@@ -86,7 +147,7 @@ current `corpo-valley.com` deployment.
 | `image.prefix` | `corpo-valley-` | Concatenated with the component name. |
 | `image.tags.<component>` | `latest` | Per-component tag override. |
 | `image.pullSecret` | `ghcr-pull-secret` | imagePullSecret name; the chart does not create it. Only needed if your registry is private. |
-| `git.platformRepoUrl` | corpo-valley-hetzner.git | What the `corpo-valley` AppProject scopes child Applications to (the deployment repo). |
+| `git.platformRepoUrl` | `""` | Optional. Your deployment repo, if you GitOps the platform — the `corpo-valley` AppProject scopes child Applications to it. Empty skips the AppProject. |
 | `cloudflare.tunnelId` | *(required)* | UUID from `cloudflared tunnel create`. |
 | `cloudflare.tunnelName` | `corpo-valley-cluster` | Cosmetic. |
 | `email.fromAddress` | `noreply@dev.cobl.io` | Kratos courier visible "from" address. |
@@ -96,7 +157,7 @@ current `corpo-valley.com` deployment.
 | `cluster.sealedSecretsControllerUrl` | in-cluster default | The portal fetches the public cert from here to seal project secrets. |
 | `cluster.sealedSecretsCertSha256` | `""` | SPKI sha256 pin of the controller cert (`scripts/print-cert-pin.sh`). **Required** for project-secret sealing — production portal images refuse trust-on-first-use. |
 | `resources.<component>.requests` / `limits` | matches the live deploy | Per-component resources. |
-| `giteaRunner.replicas` | `1` | Bump for build concurrency. |
+| `scale.giteaRunner` | `1` | Bump for build concurrency. |
 | `argocd.projectsArgocd.enabled` / `nsLogical` / `appProject` | `true` / `projects-argocd` / `projects` | The projects-ArgoCD wiring the chart expects. |
 | `argocd.trustedClientIds` | `argocd,gitea,claude-code-mcp` | Hydra clients that bypass the consent screen. |
 | `mcp.publicUrl` | `https://<hosts.mcp>` | What RFC 9728 protected-resource metadata announces. |
@@ -107,29 +168,15 @@ validates inputs against it.
 
 ## What the chart does NOT install
 
-These have to exist before `helm install`:
+The chart renders only Corpo Valley itself. Everything around it is covered
+by the install steps above:
 
-- The platform ArgoCD (in `argocd` namespace). The chart's `corpo-valley`
-  AppProject expects it; without it the AppProject is harmless.
-- The projects ArgoCD (in `cv-projects-argocd` namespace). The chart's
-  `projects` AppProject expects it. Install upstream `namespace-install.yaml`
-  per [argo-cd docs](https://argo-cd.readthedocs.io/en/stable/operator-manual/installation/#non-high-availability)
-  into the configured namespace.
-- The sealed-secrets controller (in `kube-system`).
-- The nginx ingress controller (in `ingress`).
-
-These have to be done after `helm install`:
-
-- `cvportal` Gitea site-admin user + token (Gitea CLI).
-- `CorpoValley` Gitea OIDC auth source (Gitea CLI).
-- The first platform admin (`scripts/bootstrap-admin.sh`) — self-service
-  registration is disabled, all accounts are admin-created.
-- `ARGOCD_GIT_MODULES_ENABLED=false` on `argocd-repo-server` (only if you use
-  submodules elsewhere and want ArgoCD to skip them).
-- Node-side registry routing (`/etc/hosts` + containerd certs.d) so kubelet
-  can pull from `cv-registry`. The hetzner repo ships a `setup-node-registry.sh`.
-
-The `corpo-valley-hetzner` repo runs all of these in `bootstrap.sh`.
+- **Before `helm install`** (step 1): sealed-secrets controller, nginx
+  ingress controller, projects ArgoCD, optional platform ArgoCD.
+- **After `helm install`** (steps 5–6): `scripts/post-install.sh` (Gitea
+  admin + token, OIDC auth source, runner token, ArgoCD submodule patch),
+  `scripts/setup-node-registry.sh` on each node, and
+  `scripts/bootstrap-admin.sh` for the first account.
 
 ## Verifying
 
@@ -169,9 +216,11 @@ templates/
   64-cv-platform-portal-bounds.yaml     # portal SA PVC-delete fence
   65-cv-platform-netpols.yaml           # ingress NetworkPolicies on platform svcs
 scripts/
-  generate-secrets.sh   # mints + optionally seals every Secret the chart needs
-  print-cert-pin.sh     # SPKI sha256 pin for cluster.sealedSecretsCertSha256
-  bootstrap-admin.sh    # creates the first platform admin (registration is disabled)
+  generate-secrets.sh     # mints + optionally seals every Secret the chart needs
+  print-cert-pin.sh       # SPKI sha256 pin for cluster.sealedSecretsCertSha256
+  post-install.sh         # Gitea admin/token, OIDC source, runner token, ArgoCD patch
+  setup-node-registry.sh  # per-node kubelet -> cv-registry pull routing
+  bootstrap-admin.sh      # creates the first platform admin (registration is disabled)
 values.example.yaml     # an anonymized template you can copy
 values.corpo-valley.yaml # the values for the current corpo-valley.com deploy
 SEALED_SECRETS.md       # what secrets to provision, with what keys
