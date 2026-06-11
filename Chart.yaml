@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.3.0
-appVersion: "MVP7"
+version: 0.4.0
+appVersion: "v0.1.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,7 +39,7 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
-    - kind: changed
-      description: Standalone install — README now carries the full cluster-to-running runbook; git.platformRepoUrl is optional (empty skips the platform AppProject); external deployment-repo references removed
     - kind: added
-      description: scripts/post-install.sh (Gitea admin/token, OIDC source, runner token, ArgoCD patch) and scripts/setup-node-registry.sh (per-node registry pull routing, microk8s + k3s)
+      description: oauth-host /oauth2/register now routes through the portal DCR shim — the portal proxies Hydra's Dynamic Client Registration and strips the ""/null optional fields that strict MCP clients (Claude Code's SDK) reject, fixing local `claude mcp add`
+    - kind: changed
+      description: image tags default to the upstream v0.1.0 release (first corpo-valley-main GitHub Release) instead of latest, making fresh installs reproducible; appVersion now tracks the upstream release tag

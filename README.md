@@ -145,7 +145,7 @@ current `corpo-valley.com` deployment.
 | `namespacePrefix` | `cv-` | Prefix for every platform namespace. Set to `acme-` etc. to coexist. |
 | `image.registry` | `ghcr.io/corpo-valley` | Container image registry. |
 | `image.prefix` | `corpo-valley-` | Concatenated with the component name. |
-| `image.tags.<component>` | `latest` | Per-component tag override. |
+| `image.tags.<component>` | `v0.1.0` | Per-component tag override; defaults track the latest corpo-valley-main release. Use `latest` only to deliberately ride main. |
 | `image.pullSecret` | `ghcr-pull-secret` | imagePullSecret name; the chart does not create it. Only needed if your registry is private. |
 | `git.platformRepoUrl` | `""` | Optional. Your deployment repo, if you GitOps the platform — the `corpo-valley` AppProject scopes child Applications to it. Empty skips the AppProject. |
 | `cloudflare.tunnelId` | *(required)* | UUID from `cloudflared tunnel create`. |
