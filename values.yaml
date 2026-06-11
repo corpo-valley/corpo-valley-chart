@@ -38,14 +38,17 @@ hosts:
 namespacePrefix: cv-
 
 # Container images.
-# Default produces e.g. ghcr.io/corpo-valley/corpo-valley-portal:latest.
-# Images are built and published from https://github.com/corpo-valley/corpo-valley-main.
+# Default produces e.g. ghcr.io/corpo-valley/corpo-valley-portal:v0.1.0.
+# Images are built and published from https://github.com/corpo-valley/corpo-valley-main;
+# defaults track that repo's latest GitHub Release (immutable version tags), so
+# a fresh install is reproducible. Set `latest` (or a YYYYMMDD-<sha> dev tag)
+# only when you deliberately want to ride main.
 # Per-component tag override beats image.defaultTag.
 image:
   registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   pullPolicy: IfNotPresent
-  defaultTag: latest
+  defaultTag: v0.1.0
   # Name of the imagePullSecret each workload references. Must exist in the
   # workload's namespace; the chart does NOT create it (use kubectl create
   # secret docker-registry, or a sealed secret).
@@ -53,8 +56,8 @@ image:
   # Keys are the literal image/component names (they complete
   # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
   tags:
-    portal: latest
-    mcp-gateway: latest
+    portal: v0.1.0
+    mcp-gateway: v0.1.0
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
 # Only needed if you GitOps the platform itself: point it at YOUR deployment
