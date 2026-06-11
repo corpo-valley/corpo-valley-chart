@@ -381,7 +381,13 @@ spec:
             pathType: Prefix
             backend: { service: { name: portal, port: { number: 80 } } }
 ---
-# DCR discovery shim — Exact paths beat the catch-all on the Hydra Ingress.
+# DCR shim — these paths beat the catch-all on the Hydra Ingress. The portal
+# serves the two discovery docs (augmented with registration_endpoint) AND
+# proxies /oauth2/register itself: Hydra's raw DCR responses serialize absent
+# optional fields as ""/null (client_uri, contacts, …), which strict MCP
+# clients (Claude Code's SDK Zod schema) reject — the portal proxy strips
+# them. Prefix on /oauth2/register also covers the RFC 7592 management
+# routes (/oauth2/register/<id>) that registration_client_uri points at.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -405,5 +411,8 @@ spec:
             backend: { service: { name: portal, port: { number: 80 } } }
           - path: /.well-known/openid-configuration
             pathType: Exact
+            backend: { service: { name: portal, port: { number: 80 } } }
+          - path: /oauth2/register
+            pathType: Prefix
             backend: { service: { name: portal, port: { number: 80 } } }
 {{- end }}
