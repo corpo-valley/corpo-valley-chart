@@ -130,6 +130,23 @@ create a project from the dashboard. When its pipeline goes green at
 `https://<project>.projects.example.com`, you're running. Every further user
 is created in the portal at `/admin/users`.
 
+### The Community Center project template
+
+Every new project is generated from the `corpo-valley/community-center` repo
+in the in-cluster Gitea. The portal seeds it automatically on first startup —
+after the post-install script has minted the cvportal token — from the
+baseline baked into the portal image, rendered with this deployment's domain
+and in-cluster DNS (no manual step). If the portal started before Gitea was
+ready, just restart the portal Deployment; the seed is idempotent and only
+runs when the repo is missing or empty.
+
+From then on the Gitea repo is **admin-owned**: edit it in Gitea to change
+what new projects start with. To discard admin edits and restore the factory
+default, use Admin → Project Template → "Reset template to baseline" in the
+portal (destructive: deletes files the baseline doesn't have). Upgrading the
+portal image does NOT touch the live template — new baselines only land via
+an explicit reset.
+
 ## Configuration
 
 Every setting is overridable via `values.yaml`. Defaults reproduce the

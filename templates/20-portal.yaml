@@ -277,6 +277,14 @@ spec:
               value: {{ $.Values.argocd.trustedClientIds | quote }}
             - name: PROJECTS_DOMAIN
               value: {{ include "cv.projectsHostSuffix" $ }}
+            # In-cluster endpoints the portal writes into tenant artifacts
+            # (per-project manifests, the Community Center template seed, and
+            # tenant build.yaml): the registry tenant builds push to, and the
+            # portal's own service URL for the Build workflow's pin callback.
+            - name: CV_REGISTRY
+              value: {{ include "cv.svc" (list $ "registry" "registry") }}:5000
+            - name: CV_PORTAL_INTERNAL_URL
+              value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: CV_POD_CIDR
               value: {{ $.Values.cluster.podCIDR | quote }}
             - name: CV_SERVICE_CIDR
