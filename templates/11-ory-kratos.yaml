@@ -86,16 +86,12 @@ data:
           ui_url: https://{{ $portalHost }}/registration
           lifespan: 10m
           after:
-            oidc:
-              hooks:
-                - hook: session
-                - hook: web_hook
-                  config:
-                    url: http://{{ $portalSvc }}/internal/hooks/registration
-                    method: POST
-                    body: {{ printf "base64://%s" (b64enc "function(ctx) { identity_id: ctx.identity.id }") }}
-                    response:
-                      ignore: true
+            # The oidc after-hooks (session + the provisioning web_hook) live in
+            # the kratos-google-oidc sealed-secret config fragment, merged via the
+            # second --config file. The web_hook there carries an X-Internal-Secret
+            # header so the portal can AUTHENTICATE the call (finding F3) — keeping
+            # that secret out of this ConfigMap is why the hook isn't here. The
+            # password/code deny hooks below need no secret (they only ever 403).
             password:
               hooks:
                 - hook: web_hook
@@ -173,10 +169,21 @@ data:
   oidc.google.data-mapper.jsonnet: |
     local claims = std.extVar('claims');
     local allowed = [{{- range $i, $d := $google.allowedDomains }}{{ if $i }}, {{ end }}{{ $d | quote }}{{- end }}];
-    if !std.objectHas(claims, 'email') || !std.objectHas(claims, 'email_verified') || !claims.email_verified then
+    // Domain of the email itself (lazy — only forced once email presence is
+    // confirmed below). allowedDomains are lowercase hostnames (schema-validated).
+    local emailDomain = std.asciiLower(std.split(claims.email, '@')[1]);
+    // email_verified is a JSON bool from Google; compare to `true` explicitly so
+    // a stringified "false" from a non-conformant IdP can't read as truthy.
+    if !std.objectHas(claims, 'email') || !std.objectHas(claims, 'email_verified') || claims.email_verified != true then
       error 'Your Google account email is not verified.'
     else if !std.objectHas(claims, 'hd') || !std.member(allowed, claims.hd) then
       error 'This Google account is not in an allowed Workspace domain.'
+    // Bind the IMPORTED (and verified) email to the allow-list too, not just the
+    // hd claim: a multi-domain Workspace can present an email in a different
+    // domain than hd, and that address is imported as verified — it must itself
+    // be in an allowed domain (finding F9 hardening).
+    else if !std.member(allowed, emailDomain) then
+      error 'Your Google account email is not in an allowed Workspace domain.'
     else
       {
         identity: {

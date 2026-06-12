@@ -118,15 +118,17 @@ The `credentials.json` cloudflared writes after `cloudflared tunnel create`.
 ### `kratos-google-oidc` in `<prefix>ory` (only when `auth.google.enabled`)
 
 A Kratos config FRAGMENT (merged via a second `--config` flag on the kratos
-container) carrying the google OIDC provider — this keeps the OAuth client
-secret out of the ConfigMap. Emitted by
-`generate-secrets.sh --google-client-id … --google-client-secret …`. The
+container) carrying the google OIDC provider AND the oidc after-registration
+hooks — this keeps both the OAuth client secret and the provisioning webhook's
+`X-Internal-Secret` out of the ConfigMap. Emitted by `generate-secrets.sh
+--google-client-id … --google-client-secret-file …` (prefer the file/env form
+over `--google-client-secret`, which exposes the secret in argv). The
 `mapper_url` points at the Workspace-domain-gating jsonnet the chart templates
 from `auth.google.allowedDomains`.
 
 | Key | Value |
 |---|---|
-| `google-oidc.yaml` | `selfservice.methods.oidc.config.providers: [{ id: google, provider: google, client_id, client_secret, mapper_url, scope }]` |
+| `google-oidc.yaml` | `selfservice.methods.oidc.config.providers: [{ id: google, … }]` plus `selfservice.flows.registration.after.oidc.hooks` — the provisioning `web_hook` carries `auth.api_key` = `INTERNAL_WEBHOOK_SECRET` in the `X-Internal-Secret` header, which the portal verifies. |
 
 ### `ghcr-pull-secret` (one per namespace that pulls from a private registry)
 

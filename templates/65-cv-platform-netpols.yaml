@@ -141,13 +141,22 @@ spec:
   ingress:
     - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
     # ingress controller (external traffic, MCP, and the per-project-site
-    # auth_request subrequests to /access/site/<slug>) + Build pin callback +
-    # Kratos (the after-registration webhook for Google Workspace signups
-    # posts to /internal/hooks/registration).
+    # auth_request subrequests to /access/site/<slug>) + Build pin callback
+    # (gitea-runners).
     - from:
         - namespaceSelector:
             matchExpressions:
-              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}, {{ $oryNs }}] }
+              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}] }
+      ports: [{ protocol: TCP, port: 3000 }]
+    # Kratos after-registration webhook (Google Workspace signups POST to
+    # /internal/hooks/registration). Scoped to the Kratos PODS in cv-ory — not
+    # the whole namespace — so only the actual webhook caller can reach portal
+    # :3000 (finding F7). The endpoint also requires the internal webhook secret.
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $oryNs }} }
+          podSelector:
+            matchLabels: { app: ory-kratos }
       ports: [{ protocol: TCP, port: 3000 }]
     # same-namespace mcp-gateway → portal /internal ownership check
     - from:

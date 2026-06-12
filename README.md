@@ -195,7 +195,10 @@ login method:
 1. In Google Cloud, create an OAuth client (type *Web application*) with
    redirect URI `https://<hosts.auth>/self-service/methods/oidc/callback/google`.
 2. Emit the secret: `./scripts/generate-secrets.sh … --google-client-id <id>
-   --google-client-secret <secret>` and apply/seal `kratos-google-oidc`.
+   --google-client-secret-file <path>` (or export `GOOGLE_CLIENT_SECRET`) and
+   apply/seal `kratos-google-oidc`. Prefer the file/env form over
+   `--google-client-secret <secret>`, which exposes the value in `ps`/shell
+   history.
 3. Set `auth.google.enabled: true` and `auth.google.allowedDomains:
    ["your-domain.com"]`, then `helm upgrade`.
 
