@@ -267,6 +267,10 @@ spec:
               valueFrom: { secretKeyRef: { name: gitea-admin, key: GITEA_ADMIN_TOKEN } }
             - name: GITEA_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "gitea" "gitea") }}
+            # Public Gitea URL for the links the portal/MCP hands to users and
+            # agents (clone URLs, repo links, docs). Follows hosts.gitea.
+            - name: GITEA_PUBLIC_URL
+              value: https://{{ include "cv.host" (list $ "gitea") }}
             - name: CV_PROJECTS_ARGOCD_NAMESPACE
               value: {{ $projectsArgocdNs }}
             - name: CV_PROJECTS_APPPROJECT
