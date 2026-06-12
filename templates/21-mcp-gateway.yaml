@@ -52,6 +52,12 @@ spec:
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: MCP_ENFORCE_AUDIENCE
               value: {{ $.Values.mcp.enforceAudience | quote }}
+            # Same deny-list as the portal's MCP endpoint, set EXPLICITLY so
+            # the two can't drift (the in-code fallback chain differs: without
+            # this env the gateway denied only its hardcoded default while the
+            # portal denied TRUSTED_CLIENT_IDS).
+            - name: MCP_DENY_CLIENT_IDS
+              value: {{ $.Values.mcp.denyClientIds | quote }}
           resources:
             {{- toYaml $.Values.resources.mcpGateway | nindent 12 }}
           securityContext:

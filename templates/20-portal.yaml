@@ -279,6 +279,16 @@ spec:
               value: {{ $mcpPublicUrl }}
             - name: TRUSTED_CLIENT_IDS
               value: {{ $.Values.argocd.trustedClientIds | quote }}
+            # Clients whose tokens the MCP endpoints refuse (confused-deputy
+            # guard). Set EXPLICITLY: the app's in-code default falls back to
+            # TRUSTED_CLIENT_IDS, which would wrongly deny claude-code-mcp —
+            # the one trusted client whose tokens ARE meant for MCP.
+            - name: MCP_DENY_CLIENT_IDS
+              value: {{ $.Values.mcp.denyClientIds | quote }}
+            # Portal login page shows only the Google button when the chart
+            # has the Kratos google provider enabled (auth.google).
+            - name: GOOGLE_LOGIN_ENABLED
+              value: {{ $.Values.auth.google.enabled | quote }}
             - name: PROJECTS_DOMAIN
               value: {{ include "cv.projectsHostSuffix" $ }}
             # In-cluster endpoints the portal writes into tenant artifacts

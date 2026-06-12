@@ -13,6 +13,17 @@
 #   --seal                 also seal each output with kubeseal
 #   --restore-env FILE     reuse passwords from a prior generate-secrets.sh run
 #                          (keeps DSN strings stable across regenerations)
+#   --google-client-id ID  emit the kratos-google-oidc secret for
+#                          auth.google.enabled ("Login with Google"). The
+#                          secret carries a Kratos config fragment with the
+#                          google OIDC provider; the chart mounts it as a
+#                          second Kratos config file.
+#   --google-client-secret-file FILE
+#                          read the google OAuth client secret from FILE (or set
+#                          the GOOGLE_CLIENT_SECRET env var). PREFERRED over
+#                          --google-client-secret SECRET, which puts the secret
+#                          in argv (visible in `ps`/shell history).
+#   --google-client-secret SECRET   (discouraged — see above)
 #
 # Writes:
 #   ./out/secrets/plain/<name>.yaml      (every Secret, before sealing)
@@ -20,6 +31,10 @@
 #   ./out/secrets/secrets.local.env      passwords (for --restore-env reuse)
 
 set -euo pipefail
+
+# Secrets are written in cleartext under $OUT/plain and to secrets.local.env.
+# Restrict every file this script creates to the invoking user (finding F8).
+umask 077
 
 NSP="cv-"
 SMTP_URI=""
@@ -36,6 +51,10 @@ while [[ $# -gt 0 ]]; do
     --output)                  OUT="$2"; shift 2 ;;
     --seal)                    SEAL=true; shift ;;
     --restore-env)             RESTORE_ENV="$2"; shift 2 ;;
+    --google-client-id)        GOOGLE_CLIENT_ID="$2"; shift 2 ;;
+    --google-client-secret)    GOOGLE_CLIENT_SECRET="$2"; shift 2 ;;
+    --google-client-secret-file)
+      GOOGLE_CLIENT_SECRET="$(cat "$2")"; shift 2 ;;
     -h|--help)
       sed -n '2,/^set -euo/p' "$0" | head -n -1 | sed 's/^# \{0,1\}//'
       exit 0
@@ -174,6 +193,80 @@ if [[ -n "$CFD_CREDS" ]]; then
   CFD_JSON=$(cat "$CFD_CREDS")
   emit_secret cloudflare-tunnel-credentials "$NS_CLOUDFLARED" \
     credentials.json "$CFD_JSON"
+fi
+
+# "Login with Google" (auth.google.enabled): a Kratos config FRAGMENT carrying
+# the google OIDC provider. Mounted at /etc/kratos/google-oidc/ and merged via
+# a second --config flag, so the client secret never lands in a ConfigMap.
+# The mapper_url points at the domain-gating jsonnet the chart templates from
+# auth.google.allowedDomains.
+if [[ -n "${GOOGLE_CLIENT_ID:-}" || -n "${GOOGLE_CLIENT_SECRET:-}" ]]; then
+  if [[ -z "${GOOGLE_CLIENT_ID:-}" || -z "${GOOGLE_CLIENT_SECRET:-}" ]]; then
+    echo "--google-client-id and --google-client-secret must be passed together" >&2
+    exit 1
+  fi
+  # Multiline value → hand-rolled literal block scalar (emit_secret's %q
+  # quoting is single-line only). This fragment also carries the oidc
+  # after-registration hooks: the provisioning web_hook sends an X-Internal-Secret
+  # header so the portal authenticates it (finding F3) — keeping that secret out
+  # of the Kratos ConfigMap is why the hook lives here, not in 11-ory-kratos.yaml.
+  PORTAL_REG_HOOK_URL="http://portal.${NS_PORTAL}.svc.cluster.local/internal/hooks/registration"
+  REG_HOOK_BODY_B64=$(printf '%s' 'function(ctx) { identity_id: ctx.identity.id }' | base64 | tr -d '\n')
+  file="$OUT/plain/kratos-google-oidc.yaml"
+  {
+    echo "apiVersion: v1"
+    echo "kind: Secret"
+    echo "metadata:"
+    echo "  name: kratos-google-oidc"
+    echo "  namespace: $NS_ORY"
+    echo "type: Opaque"
+    echo "stringData:"
+    echo "  google-oidc.yaml: |"
+    cat <<EOF | sed 's/^/    /'
+selfservice:
+  methods:
+    oidc:
+      config:
+        providers:
+          - id: google
+            provider: google
+            client_id: ${GOOGLE_CLIENT_ID}
+            client_secret: ${GOOGLE_CLIENT_SECRET}
+            mapper_url: file:///etc/kratos/config/oidc.google.data-mapper.jsonnet
+            scope:
+              - email
+              - profile
+  flows:
+    registration:
+      after:
+        oidc:
+          hooks:
+            - hook: session
+            - hook: web_hook
+              config:
+                url: ${PORTAL_REG_HOOK_URL}
+                method: POST
+                body: base64://${REG_HOOK_BODY_B64}
+                auth:
+                  type: api_key
+                  config:
+                    name: X-Internal-Secret
+                    value: ${INTERNAL_WEBHOOK_SECRET}
+                    in: header
+                response:
+                  ignore: true
+EOF
+  } >"$file"
+  if $SEAL; then
+    kubeseal \
+      --controller-name=sealed-secrets-controller \
+      --controller-namespace=kube-system \
+      --format=yaml \
+      <"$file" >"$OUT/sealed/kratos-google-oidc.sealed.yaml"
+    echo "sealed -> $OUT/sealed/kratos-google-oidc.sealed.yaml"
+  else
+    echo "wrote  -> $file"
+  fi
 fi
 
 echo

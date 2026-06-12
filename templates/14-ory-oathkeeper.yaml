@@ -113,17 +113,11 @@ data:
       },
       {
         "id": "gitea-ui-rule",
-        "_comment": "Gitea web UI — gated by Kratos session + Keto access.",
+        "_comment": "Gitea web UI — gated to any signed-in Corpo Valley member by the Kratos session (cookie_session); Gitea itself enforces per-repo visibility (private repos are only visible to their collaborators). The edge authorizer is `allow`: it is NOT a Keto service check, because nothing grants `services:gitea#access` (gitea is a protected client the admin UI can't toggle, and bootstrap only seeds groups:ADMIN), so a Keto check here forbids every member — including admins — and the redirect error handler turns that into an infinite /login loop. Members reach the UI from the project-card 'Repo' links, so it must be member-accessible.",
         "version": "v0.40.0",
         "match": { "url": "<https?://>{{ $giteaHost }}/<(?!api/|v2/|.+\\.git/).*>", "methods": ["GET","POST","PUT","DELETE","PATCH"] },
         "authenticators": [{ "handler": "cookie_session" }],
-        "authorizer": {
-          "handler": "remote_json",
-          "config": {
-            "remote": "http://{{ $ketoRead }}:4466/relation-tuples/check",
-            "payload": "{\"namespace\":\"services\",\"object\":\"gitea\",\"relation\":\"access\",\"subject_id\":\"{{ "{{ print .Subject }}" }}\"}"
-          }
-        },
+        "authorizer": { "handler": "allow" },
         "mutators": [{
           "handler": "header",
           "config": { "headers": { "X-User-Id": "{{ "{{ print .Subject }}" }}", "X-User-Email": "{{ "{{ print .Extra.identity.traits.email }}" }}" } }
@@ -163,7 +157,9 @@ spec:
       labels:
         app: ory-oathkeeper
       annotations:
-        config-revision: "2026-06-01-mvp5-projects-decisions"
+        # Bump on any rules/config change — the rules are a mounted ConfigMap and
+        # oathkeeper doesn't hot-reload, so the pod must roll to pick them up.
+        config-revision: "2026-06-12-gitea-ui-allow"
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}

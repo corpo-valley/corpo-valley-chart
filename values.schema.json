@@ -73,6 +73,27 @@
         "fromName":    { "type": "string" }
       }
     },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "google": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "allowedDomains": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+              },
+              "description": "Google Workspace domains (hd claim) allowed to sign in/up. Required (non-empty) when enabled."
+            }
+          }
+        }
+      }
+    },
     "storage": {
       "type": "object",
       "additionalProperties": false,
@@ -145,7 +166,8 @@
       "additionalProperties": false,
       "properties": {
         "publicUrl":       { "type": "string" },
-        "enforceAudience": { "type": "boolean" }
+        "enforceAudience": { "type": "boolean" },
+        "denyClientIds":   { "type": "string" }
       }
     },
     "backups": {

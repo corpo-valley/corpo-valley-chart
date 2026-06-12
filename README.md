@@ -107,8 +107,11 @@ helm install corpo-valley . \
 
 ```bash
 # Creates the cvportal Gitea site-admin + token, registers the CorpoValley
-# OIDC auth source, mints the Actions runner registration token, and patches
-# the platform ArgoCD (if present). Idempotent — re-run freely.
+# OIDC auth source, mints the Actions runner registration token, gives the
+# projects ArgoCD a Gitea repo credential (so it can clone the always-private
+# project repos — without it every project Application fails to sync), and
+# patches the platform ArgoCD (if present). Idempotent — re-run freely.
+# Run AFTER the projects ArgoCD (step 3) is installed.
 ./scripts/post-install.sh --domain example.com
 
 # On EVERY node: lets kubelet pull project images from the in-cluster
@@ -179,9 +182,40 @@ current `corpo-valley.com` deployment.
 | `argocd.trustedClientIds` | `argocd,gitea,claude-code-mcp` | Hydra clients that bypass the consent screen. |
 | `mcp.publicUrl` | `https://<hosts.mcp>` | What RFC 9728 protected-resource metadata announces. |
 | `mcp.enforceAudience` | `false` | RFC 8707 audience enforcement on MCP tokens (portal + gateway). Enable once your MCP clients send resource indicators. |
+| `mcp.denyClientIds` | `argocd,gitea` | OAuth clients whose tokens the MCP endpoints refuse (confused-deputy guard). Deliberately excludes `claude-code-mcp`, which IS an MCP client. |
+| `auth.google.enabled` | `false` | "Login with Google" — see below. |
+| `auth.google.allowedDomains` | `[]` | Workspace domains allowed to sign in/up. Required when enabled. |
 
 See `values.schema.json` for the full constrained schema. `helm install`
 validates inputs against it.
+
+### Login with Google (Workspace)
+
+`auth.google.enabled: true` lets anyone from your Google Workspace domain(s)
+sign **in and up** with Google, and makes the Google button the only visible
+login method:
+
+1. In Google Cloud, create an OAuth client (type *Web application*) with
+   redirect URI `https://<hosts.auth>/self-service/methods/oidc/callback/google`.
+2. Emit the secret: `./scripts/generate-secrets.sh … --google-client-id <id>
+   --google-client-secret-file <path>` (or export `GOOGLE_CLIENT_SECRET`) and
+   apply/seal `kratos-google-oidc`. Prefer the file/env form over
+   `--google-client-secret <secret>`, which exposes the value in `ps`/shell
+   history.
+3. Set `auth.google.enabled: true` and `auth.google.allowedDomains:
+   ["your-domain.com"]`, then `helm upgrade`.
+
+What you get: the Workspace domain gate runs *inside Kratos* (the OIDC data
+mapper rejects other domains and unverified emails, so it can't be bypassed by
+calling Kratos directly); password/code self-signup stays blocked (a portal
+webhook rejects those methods); new members are auto-provisioned (paired
+`.bot` identity + Gitea account) at first login; and Google-attested emails
+arrive verified, so new members can create projects immediately.
+
+**Break-glass:** the password/code form stays fully functional at
+`/login?method=password` (linked from the login page as "Sign in another
+way"). Verify an admin can use it BEFORE relying on Google exclusively —
+recovery from a broken Google client config depends on it.
 
 ## What the chart does NOT install
 

@@ -83,6 +83,31 @@ email:
   fromAddress: noreply@dev.cobl.io
   fromName: Corpo Valley
 
+# Authentication options.
+auth:
+  # "Login with Google" — Workspace-domain-restricted Google sign-in + signup.
+  # When enabled:
+  #   - Kratos gains a `google` OIDC provider. Client id/secret come from the
+  #     sealed secret `kratos-google-oidc` (generate-secrets.sh
+  #     --google-client-id/--google-client-secret), mounted as a second Kratos
+  #     config file so the secret never lands in a ConfigMap.
+  #   - Self-service registration turns ON, restricted to the oidc method:
+  #     the data-mapper rejects accounts outside allowedDomains (and
+  #     unverified emails), and password/code signups are rejected by the
+  #     portal's deny webhook. New Workspace users are auto-provisioned as
+  #     full members at first login (bot identity + Gitea account).
+  #   - The portal login page shows ONLY the Google button. The password/code
+  #     form stays reachable at /login?method=password — VERIFY that
+  #     break-glass path works for an admin account before relying on Google
+  #     exclusively.
+  # Google Cloud setup: OAuth client (web), redirect URI
+  #   https://<hosts.auth>/self-service/methods/oidc/callback/google
+  google:
+    enabled: false
+    # Google Workspace domains whose members may sign in / sign up (the `hd`
+    # claim). REQUIRED when enabled — there is no "any Google account" mode.
+    allowedDomains: []
+
 # Persistent storage.
 # Set className to the RWO storage class your cluster ships with:
 #   - microk8s-hostpath (current corpo-valley.com deploy)
@@ -189,7 +214,22 @@ argocd:
 # MCP gateway. publicUrl defaults to https://<hosts.mcp>.
 mcp:
   publicUrl: ""
+  # RFC 8707 audience binding. Deliberately OFF: common MCP clients (Claude
+  # Code, Cursor, Codex) don't send resource indicators yet, so their tokens
+  # arrive with an empty `aud` and enforcement would break every connect.
+  # The non-bypassable backstop still applies either way — a token naming a
+  # DIFFERENT resource is always rejected — and per-project gateways always
+  # verify project ownership per request. Flip to true once your clients are
+  # confirmed sending resource indicators.
   enforceAudience: false
+  # OAuth clients whose tokens the MCP endpoints refuse (confused-deputy
+  # guard: first-party SSO clients skip consent, so their tokens carry the
+  # user's identity and must not be replayable against MCP). Deliberately
+  # NOT the same set as argocd.trustedClientIds: claude-code-mcp is trusted
+  # for consent AND is the client MCP tooling uses — denying it would break
+  # the static-client MCP path. Wired to both the portal and the mcp-gateway
+  # so the two enforce identically.
+  denyClientIds: argocd,gitea
 
 # Phase-2 placeholders kept so values files stay forward-compatible.
 backups:
