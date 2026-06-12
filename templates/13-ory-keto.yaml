@@ -1,6 +1,5 @@
 {{- if include "cv.role.platform" . }}
 {{- $ns := include "cv.ns" (list $ "ory") }}
-{{- $ketoWrite := include "cv.svc" (list $ "ory-keto-write" "ory") }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -118,46 +117,4 @@ spec:
     app: ory-keto
   ports:
     - { protocol: TCP, port: 4467, targetPort: 4467 }
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: bootstrap-keto-group-hierarchy
-  namespace: {{ $ns }}
-  labels:
-    {{- include "cv.labels" $ | nindent 4 }}
-    app: ory-keto
-    component: group-hierarchy
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-spec:
-  backoffLimit: 3
-  ttlSecondsAfterFinished: 300
-  template:
-    metadata:
-      labels:
-        app: ory-keto-bootstrap
-    spec:
-      imagePullSecrets:
-        - name: {{ $.Values.image.pullSecret }}
-      restartPolicy: Never
-      containers:
-        - name: bootstrap
-          image: oryd/keto:v0.12
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              cat > /tmp/hierarchy.json <<'EOF'
-              [
-                {"namespace":"groups","object":"EVERYONE","relation":"members","subject_set":{"namespace":"groups","object":"BETA","relation":"members"}},
-                {"namespace":"groups","object":"BETA","relation":"members","subject_set":{"namespace":"groups","object":"ALPHA","relation":"members"}},
-                {"namespace":"groups","object":"ALPHA","relation":"members","subject_set":{"namespace":"groups","object":"ADMIN","relation":"members"}}
-              ]
-              EOF
-              keto relation-tuple create /tmp/hierarchy.json \
-                --insecure-disable-transport-security \
-                --write-remote "{{ $ketoWrite }}:4467" \
-              && echo "Group hierarchy created." \
-              || echo "Hierarchy may already exist (expected on re-sync)."
 {{- end }}
