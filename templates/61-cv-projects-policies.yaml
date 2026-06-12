@@ -151,8 +151,13 @@ spec:
       messageExpression: "'Project Ingress hosts must all equal ' + object.metadata.namespace + '.{{ $projectsHostSuffix }}'"
     # The portal /access/site form must be slug-bound: the path's slug MUST equal
     # this Ingress's own namespace, so a manifest can't gate namespace A's site
-    # behind project B's permission check (finding F7).
-    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $portalSvc }}/access/site/' + object.metadata.namespace))"
+    # behind project B's permission check (finding F7). Use EXACT equality, not
+    # startsWith — a prefix match would let namespace `flappy` point at
+    # `/access/site/flappy-game` (a sibling project). The portal generates the
+    # auth-url as exactly `http://<portal>/access/site/<slug>` with no trailing
+    # slash or query (manifests.ts; PORTAL_INTERNAL_URL strips trailing slashes,
+    # slugs are DNS-1123 labels), so exact match never rejects a legitimate one.
+    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'] == 'http://{{ $portalSvc }}/access/site/' + object.metadata.namespace)"
       message: "Project Ingress must carry an auth-url annotation pointing at the platform identity gate (Kratos whoami, Oathkeeper decisions, or the portal /access/site/<this-namespace> endpoint)."
 ---
 apiVersion: admissionregistration.k8s.io/v1
