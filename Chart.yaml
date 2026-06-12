@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.4.1
-appVersion: "v0.1.3"
+version: 0.5.0
+appVersion: "v0.1.4"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -40,4 +40,8 @@ keywords:
 annotations:
   artifacthub.io/changes: |
     - kind: changed
-      description: default image tags bumped to the upstream v0.1.3 release — the portal now seeds the Community Center template into Gitea on first startup (admin-owned thereafter, explicit reset in the admin UI) and renders tenant artifacts from CV_REGISTRY / CV_PORTAL_INTERNAL_URL / PROJECTS_DOMAIN instead of hardcoded corpo-valley.com values
+      description: the legacy ALPHA/BETA/EVERYONE tier hierarchy is retired — roles are now just admin vs user (the groups:ADMIN#members Keto tuple, unchanged, so existing admins keep working); the tier-hierarchy seed Job and gitea's decorative BETA access grant are removed, and stale tier tuples in older deployments are ignored
+    - kind: removed
+      description: bootstrap-keto-group-hierarchy and register-gitea-keto-access PostSync Jobs
+    - kind: changed
+      description: default image tags bumped to the upstream v0.1.4 release (admin/user role model in the portal)

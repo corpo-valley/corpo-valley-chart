@@ -1,15 +1,13 @@
 {{/*
-  Post-sync wiring between Gitea and the Ory stack:
-   - register the "gitea" OAuth2 client on Hydra
-   - grant gitea BETA access on Keto
-
-  Both are idempotent (skip if the tuple/client already exists), so they re-run
-  safely after every ArgoCD sync.
+  Post-sync wiring between Gitea and the Ory stack: register the "gitea"
+  OAuth2 client on Hydra. Idempotent (skips if the client already exists), so
+  it re-runs safely after every ArgoCD sync. No Keto access tuple is needed:
+  gitea is a trusted first-party client (TRUSTED_CLIENT_IDS) and services
+  without an admins-only tuple are open to every signed-in user.
 */}}
 {{- if include "cv.role.platform" . }}
 {{- $oryNs := include "cv.ns" (list $ "ory") }}
 {{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
-{{- $ketoWrite := include "cv.svc" (list $ "ory-keto-write" "ory") }}
 {{- $giteaHost := include "cv.host" (list $ "gitea") }}
 ---
 apiVersion: batch/v1
@@ -57,45 +55,6 @@ spec:
                 --response-type code \
                 --scope openid,profile,email,offline_access \
                 --redirect-uri "https://{{ $giteaHost }}/user/oauth2/CorpoValley/callback" \
-                --token-endpoint-auth-method client_secret_basic \
-                --metadata '{"tier":"BETA"}'
+                --token-endpoint-auth-method client_secret_basic
               echo "Client 'gitea' created."
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: register-gitea-keto-access
-  namespace: {{ $oryNs }}
-  labels:
-    {{- include "cv.labels" $ | nindent 4 }}
-    app: ory-keto
-    component: service-access
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-spec:
-  backoffLimit: 3
-  ttlSecondsAfterFinished: 300
-  template:
-    metadata:
-      labels:
-        app: ory-keto-bootstrap
-    spec:
-      imagePullSecrets:
-        - name: {{ $.Values.image.pullSecret }}
-      restartPolicy: Never
-      containers:
-        - name: create-relation
-          image: oryd/keto:v0.12
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              cat > /tmp/tuple.json <<'EOF'
-              [{"namespace":"services","object":"gitea","relation":"access","subject_set":{"namespace":"groups","object":"BETA","relation":"members"}}]
-              EOF
-              keto relation-tuple create /tmp/tuple.json \
-                --insecure-disable-transport-security \
-                --write-remote "{{ $ketoWrite }}:4467" \
-              && echo "Gitea BETA access granted." \
-              || echo "Tuple may already exist (expected on re-sync)."
 {{- end }}

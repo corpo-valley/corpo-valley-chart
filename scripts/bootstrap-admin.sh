@@ -4,9 +4,9 @@
 # Self-service registration is disabled platform-wide — accounts are created by
 # an admin from the portal (/admin/users). That's a chicken-and-egg for a fresh
 # install, so this script creates the first identity directly against the
-# Kratos admin API and grants it the ADMIN tier in Keto. It then prints a
+# Kratos admin API and grants it the admin role in Keto. It then prints a
 # one-time recovery link + code: open the link, enter the code, set a password.
-# The portal provisions the rest (EVERYONE grant, paired .bot identity, Gitea
+# The portal provisions the rest (paired .bot identity, Gitea
 # accounts) on first login. Create every subsequent user from the portal UI.
 #
 # Usage:
@@ -56,7 +56,7 @@ IDENTITY_ID=$(jq -r '.id' <<<"$IDENTITY_JSON")
 [[ "$IDENTITY_ID" != "null" && -n "$IDENTITY_ID" ]] || { echo "ERROR: no identity id in: $IDENTITY_JSON" >&2; exit 1; }
 echo "    identity: $IDENTITY_ID"
 
-echo "==> Granting ADMIN tier in Keto"
+echo "==> Granting admin role in Keto"
 kcurl -X PUT http://ory-keto-write:4467/admin/relation-tuples \
   -H 'Content-Type: application/json' \
   -d "$(jq -n --arg id "$IDENTITY_ID" \

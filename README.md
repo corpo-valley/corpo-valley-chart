@@ -120,7 +120,7 @@ sudo ./scripts/setup-node-registry.sh
 
 ```bash
 # Self-service registration is disabled by design — the first account is
-# created against the Kratos admin API and granted the ADMIN tier. Prints a
+# created against the Kratos admin API and granted the admin role. Prints a
 # one-time recovery link to set your password.
 ./scripts/bootstrap-admin.sh --email you@example.com --username you
 ```
@@ -222,7 +222,7 @@ templates/
   20-portal.yaml        # portal Deployment + RBAC + Ingresses (incl. MCP)
   21-mcp-gateway.yaml   # MCP-gateway sidecar Deployment + NetworkPolicies
   30-gitea.yaml         # gitea Deployment + PVC
-  31-gitea-oidc.yaml    # PostSync hooks: hydra client + keto BETA grant
+  31-gitea-oidc.yaml    # PostSync hook: hydra client registration
   32-gitea-runners.yaml # act_runner + dind + egress NetworkPolicy
   40-registry.yaml      # cv-registry
   50-cloudflared.yaml   # cloudflare-tunnel Deployment + config
