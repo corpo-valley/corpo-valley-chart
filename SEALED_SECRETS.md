@@ -115,6 +115,19 @@ The `credentials.json` cloudflared writes after `cloudflared tunnel create`.
 |---|---|
 | `credentials.json` | the raw JSON content |
 
+### `kratos-google-oidc` in `<prefix>ory` (only when `auth.google.enabled`)
+
+A Kratos config FRAGMENT (merged via a second `--config` flag on the kratos
+container) carrying the google OIDC provider — this keeps the OAuth client
+secret out of the ConfigMap. Emitted by
+`generate-secrets.sh --google-client-id … --google-client-secret …`. The
+`mapper_url` points at the Workspace-domain-gating jsonnet the chart templates
+from `auth.google.allowedDomains`.
+
+| Key | Value |
+|---|---|
+| `google-oidc.yaml` | `selfservice.methods.oidc.config.providers: [{ id: google, provider: google, client_id, client_secret, mapper_url, scope }]` |
+
 ### `ghcr-pull-secret` (one per namespace that pulls from a private registry)
 
 The chart references this `imagePullSecret` name in every workload. If you use

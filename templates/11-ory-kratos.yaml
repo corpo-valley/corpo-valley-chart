@@ -3,6 +3,11 @@
 {{- $portalHost := include "cv.host" (list $ "portal") }}
 {{- $authHost := include "cv.host" (list $ "auth") }}
 {{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
+{{- $portalSvc := include "cv.svc" (list $ "portal" "portal") }}
+{{- $google := $.Values.auth.google }}
+{{- if and $google.enabled (not $google.allowedDomains) }}
+{{- fail "auth.google.enabled requires auth.google.allowedDomains (at least one Workspace domain)" }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -45,6 +50,15 @@ data:
           passwordless_enabled: true
         link:
           enabled: true
+        {{- if $google.enabled }}
+        # "Login with Google" (auth.google.enabled). The provider list — which
+        # carries the OAuth client secret — lives in the sealed secret
+        # kratos-google-oidc, mounted as a SECOND config file (see the
+        # container args); only the toggle and the domain-restricting data
+        # mapper (below) live in this ConfigMap.
+        oidc:
+          enabled: true
+        {{- end }}
         # Self-service profile editing is DISABLED: users must not change their
         # own traits (email / username / name) — only an admin can, via the admin
         # API (portal /admin/users). With this off, the settings flow offers only
@@ -57,14 +71,58 @@ data:
         login:
           ui_url: https://{{ $portalHost }}/login
           lifespan: 10m
+        {{- if $google.enabled }}
+        registration:
+          # Registration is ON solely for Google Workspace signup. The oidc
+          # data mapper rejects accounts outside auth.google.allowedDomains;
+          # password/code registrations are rejected by the portal deny
+          # webhook below (the portal UI never offers them, this closes the
+          # direct-Kratos-API path). One-step keeps the method set
+          # deterministic. After a successful Google signup the portal
+          # provisioning webhook creates the .bot identity + Gitea account
+          # (response.ignore — it never blocks or fails the signup).
+          enabled: true
+          enable_legacy_one_step: true
+          ui_url: https://{{ $portalHost }}/registration
+          lifespan: 10m
+          after:
+            oidc:
+              hooks:
+                - hook: session
+                - hook: web_hook
+                  config:
+                    url: http://{{ $portalSvc }}/internal/hooks/registration
+                    method: POST
+                    body: {{ printf "base64://%s" (b64enc "function(ctx) { identity_id: ctx.identity.id }") }}
+                    response:
+                      ignore: true
+            password:
+              hooks:
+                - hook: web_hook
+                  config:
+                    url: http://{{ $portalSvc }}/internal/hooks/registration/deny
+                    method: POST
+                    body: {{ printf "base64://%s" (b64enc "function(ctx) {}") }}
+                    can_interrupt: true
+            code:
+              hooks:
+                - hook: web_hook
+                  config:
+                    url: http://{{ $portalSvc }}/internal/hooks/registration/deny
+                    method: POST
+                    body: {{ printf "base64://%s" (b64enc "function(ctx) {}") }}
+                    can_interrupt: true
+        {{- else }}
         registration:
           # Self-service registration is DISABLED — accounts are created only by
-          # an admin (portal /admin/users), which provisions the EVERYONE grant +
-          # paired .bot identity + Gitea accounts synchronously. The first admin
-          # is bootstrapped post-install (see scripts/bootstrap-admin.sh).
+          # an admin (portal /admin/users), which provisions the paired .bot
+          # identity + Gitea accounts synchronously. The first admin is
+          # bootstrapped post-install (see scripts/bootstrap-admin.sh). Flip
+          # auth.google.enabled to allow Workspace-domain Google signup.
           enabled: false
           ui_url: https://{{ $portalHost }}/login
           lifespan: 10m
+        {{- end }}
         verification:
           ui_url: https://{{ $portalHost }}/verification
           enabled: true
@@ -104,6 +162,37 @@ data:
         from_address: {{ $.Values.email.fromAddress }}
         from_name: {{ $.Values.email.fromName | quote }}
 
+{{- if $google.enabled }}
+  # Data mapper for the google OIDC provider (referenced by mapper_url in the
+  # kratos-google-oidc secret config). THE domain gate: it runs inside Kratos
+  # on every Google signup/login, so it can't be bypassed by skipping the
+  # portal UI. Rejects unverified emails and any account whose Workspace `hd`
+  # claim isn't in auth.google.allowedDomains (personal gmail has no hd claim
+  # → rejected). Google attests email_verified, so the address is imported as
+  # verified — the member can provision immediately (requireVerifiedEmail).
+  oidc.google.data-mapper.jsonnet: |
+    local claims = std.extVar('claims');
+    local allowed = [{{- range $i, $d := $google.allowedDomains }}{{ if $i }}, {{ end }}{{ $d | quote }}{{- end }}];
+    if !std.objectHas(claims, 'email') || !std.objectHas(claims, 'email_verified') || !claims.email_verified then
+      error 'Your Google account email is not verified.'
+    else if !std.objectHas(claims, 'hd') || !std.member(allowed, claims.hd) then
+      error 'This Google account is not in an allowed Workspace domain.'
+    else
+      {
+        identity: {
+          traits: {
+            email: claims.email,
+            [if std.objectHas(claims, 'given_name') || std.objectHas(claims, 'family_name') then 'name']: {
+              [if std.objectHas(claims, 'given_name') then 'first']: claims.given_name,
+              [if std.objectHas(claims, 'family_name') then 'last']: claims.family_name,
+            },
+          },
+          verified_addresses: [
+            { via: 'email', value: claims.email },
+          ],
+        },
+      }
+{{- end }}
   person.schema.json: |
     {
       "$id": "https://schemas.{{ $.Values.domain }}/person.schema.json",
@@ -170,7 +259,7 @@ spec:
         app: ory-kratos
       annotations:
         # Restart the pod whenever the mounted Kratos config changes.
-        config-revision: "2026-06-09-disable-profile-method"
+        config-revision: "2026-06-12-google-oidc{{ if $google.enabled }}-on{{ end }}"
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
@@ -194,7 +283,10 @@ spec:
       containers:
         - name: kratos
           image: oryd/kratos:v1.3.0
-          args: [serve, all, --watch-courier, --config, /etc/kratos/config/kratos.yaml]
+          # With Google login enabled, a SECOND config file (from the sealed
+          # secret kratos-google-oidc) merges in the oidc provider list —
+          # keeping the OAuth client secret out of the ConfigMap.
+          args: [serve, all, --watch-courier, --config, /etc/kratos/config/kratos.yaml{{- if $google.enabled }}, --config, /etc/kratos/google-oidc/google-oidc.yaml{{- end }}]
           ports:
             - { name: public, containerPort: 4433 }
             - { name: admin,  containerPort: 4434 }
@@ -214,6 +306,9 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /etc/kratos/config }
             - { name: schemas, mountPath: /etc/kratos/schemas }
+            {{- if $google.enabled }}
+            - { name: google-oidc, mountPath: /etc/kratos/google-oidc, readOnly: true }
+            {{- end }}
           resources:
             {{- toYaml $.Values.resources.kratos | nindent 12 }}
           livenessProbe:
@@ -230,11 +325,19 @@ spec:
             name: ory-kratos-config
             items:
               - { key: kratos.yaml, path: kratos.yaml }
+              {{- if $google.enabled }}
+              - { key: oidc.google.data-mapper.jsonnet, path: oidc.google.data-mapper.jsonnet }
+              {{- end }}
         - name: schemas
           configMap:
             name: ory-kratos-config
             items:
               - { key: person.schema.json, path: person.schema.json }
+        {{- if $google.enabled }}
+        - name: google-oidc
+          secret:
+            secretName: kratos-google-oidc
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

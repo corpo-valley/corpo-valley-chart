@@ -140,12 +140,14 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
-    # ingress controller (external + MCP traffic) + Build pin callback. Kratos
-    # no longer calls the portal — provisioning moved in-portal.
+    # ingress controller (external traffic, MCP, and the per-project-site
+    # auth_request subrequests to /access/site/<slug>) + Build pin callback +
+    # Kratos (the after-registration webhook for Google Workspace signups
+    # posts to /internal/hooks/registration).
     - from:
         - namespaceSelector:
             matchExpressions:
-              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}] }
+              - { key: kubernetes.io/metadata.name, operator: In, values: [ingress, {{ $giteaRunnersNs }}, {{ $oryNs }}] }
       ports: [{ protocol: TCP, port: 3000 }]
     # same-namespace mcp-gateway → portal /internal ownership check
     - from:

@@ -11,6 +11,7 @@
 {{- $oryNs := include "cv.ns" (list $ "ory") }}
 {{- $kratosPublicSvc := include "cv.svc" (list $ "ory-kratos-public" "ory") }}
 {{- $oathkeeperApiSvc := include "cv.svc" (list $ "ory-oathkeeper-api" "ory") }}
+{{- $portalSvc := include "cv.svc" (list $ "portal" "portal") }}
 {{- $nsPrefix := $.Values.namespacePrefix }}
 {{- $platformDenylist := list "default" "argocd" "ingress-nginx" "ingress-controller" }}
 {{- $platformDenylistCEL := printf "['%s']" (join "','" $platformDenylist) }}
@@ -148,8 +149,8 @@ spec:
   validations:
     - expression: "has(object.spec.rules) && object.spec.rules.all(r, has(r.host) && r.host == object.metadata.namespace + '.{{ $projectsHostSuffix }}')"
       messageExpression: "'Project Ingress hosts must all equal ' + object.metadata.namespace + '.{{ $projectsHostSuffix }}'"
-    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:'))"
-      message: "Project Ingress must carry an auth-url annotation pointing at the platform identity gate (Kratos whoami or Oathkeeper decisions)."
+    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $portalSvc }}/access/site/'))"
+      message: "Project Ingress must carry an auth-url annotation pointing at the platform identity gate (portal /access/site, Kratos whoami, or Oathkeeper decisions)."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
