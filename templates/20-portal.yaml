@@ -285,6 +285,13 @@ spec:
               value: {{ include "cv.svc" (list $ "registry" "registry") }}:5000
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
+            # StorageClass for the per-project Postgres PVCs the portal emits.
+            # Always injected (even when empty): an empty value tells the
+            # portal to omit storageClassName so the cluster default binds;
+            # leaving the env UNSET would fall back to the portal's legacy
+            # microk8s-hostpath default and wedge PVCs on other clusters.
+            - name: CV_STORAGE_CLASS
+              value: {{ $.Values.storage.className | quote }}
             - name: CV_POD_CIDR
               value: {{ $.Values.cluster.podCIDR | quote }}
             - name: CV_SERVICE_CIDR

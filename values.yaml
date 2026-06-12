@@ -87,7 +87,10 @@ email:
 # Set className to the RWO storage class your cluster ships with:
 #   - microk8s-hostpath (current corpo-valley.com deploy)
 #   - hcloud-volumes (Hetzner)
+#   - gp3 (EKS)
 #   - "" = use cluster default
+# className also drives the PVCs of per-project Postgres instances the portal
+# provisions at runtime (injected as CV_STORAGE_CLASS).
 storage:
   className: ""
   oryPostgres: 5Gi

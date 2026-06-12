@@ -45,3 +45,5 @@ annotations:
       description: bootstrap-keto-group-hierarchy and register-gitea-keto-access PostSync Jobs
     - kind: changed
       description: default image tags bumped to the upstream v0.1.4 release (admin/user role model in the portal)
+    - kind: added
+      description: storage.className is now injected into the portal as CV_STORAGE_CLASS so per-project Postgres PVCs use the deployment's storage class instead of the hardcoded microk8s-hostpath (empty = cluster default)
