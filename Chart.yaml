@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.4.0
-appVersion: "v0.1.0"
+version: 0.4.1
+appVersion: "v0.1.3"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,7 +39,5 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
-    - kind: added
-      description: oauth-host /oauth2/register now routes through the portal DCR shim — the portal proxies Hydra's Dynamic Client Registration and strips the ""/null optional fields that strict MCP clients (Claude Code's SDK) reject, fixing local `claude mcp add`
     - kind: changed
-      description: image tags default to the upstream v0.1.0 release (first corpo-valley-main GitHub Release) instead of latest, making fresh installs reproducible; appVersion now tracks the upstream release tag
+      description: default image tags bumped to the upstream v0.1.3 release — the portal now seeds the Community Center template into Gitea on first startup (admin-owned thereafter, explicit reset in the admin UI) and renders tenant artifacts from CV_REGISTRY / CV_PORTAL_INTERNAL_URL / PROJECTS_DOMAIN instead of hardcoded corpo-valley.com values
