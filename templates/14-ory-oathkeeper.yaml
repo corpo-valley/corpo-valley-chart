@@ -157,7 +157,9 @@ spec:
       labels:
         app: ory-oathkeeper
       annotations:
-        config-revision: "2026-06-01-mvp5-projects-decisions"
+        # Bump on any rules/config change — the rules are a mounted ConfigMap and
+        # oathkeeper doesn't hot-reload, so the pod must roll to pick them up.
+        config-revision: "2026-06-12-gitea-ui-allow"
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
