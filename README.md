@@ -107,8 +107,11 @@ helm install corpo-valley . \
 
 ```bash
 # Creates the cvportal Gitea site-admin + token, registers the CorpoValley
-# OIDC auth source, mints the Actions runner registration token, and patches
-# the platform ArgoCD (if present). Idempotent — re-run freely.
+# OIDC auth source, mints the Actions runner registration token, gives the
+# projects ArgoCD a Gitea repo credential (so it can clone the always-private
+# project repos — without it every project Application fails to sync), and
+# patches the platform ArgoCD (if present). Idempotent — re-run freely.
+# Run AFTER the projects ArgoCD (step 3) is installed.
 ./scripts/post-install.sh --domain example.com
 
 # On EVERY node: lets kubelet pull project images from the in-cluster

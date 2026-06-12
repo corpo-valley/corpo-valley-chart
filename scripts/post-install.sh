@@ -7,7 +7,10 @@
 #  2. Register the "CorpoValley" OIDC auth source in Gitea (login via Hydra).
 #  3. Mint a Gitea Actions runner registration token; patch the
 #     runner-registration-token Secret and restart the runner.
-#  4. If a platform ArgoCD is present in `argocd`, set
+#  4. Give the projects ArgoCD a Gitea repo credential so it can CLONE the
+#     (always-private) project repos — without it, every project Application
+#     fails to sync (there is no anonymous fallback now that repos are private).
+#  5. If a platform ArgoCD is present in `argocd`, set
 #     ARGOCD_GIT_MODULES_ENABLED=false on argocd-repo-server (skip submodules).
 #
 # Idempotent: every step checks current state first and skips if already done.
@@ -86,7 +89,42 @@ if [[ -z "$EXISTING_RUNNER_TOKEN" || "$EXISTING_RUNNER_TOKEN" == "unset-mint-pos
   echo "    minted + applied runner registration token"
 fi
 
-# 4. ARGOCD_GIT_MODULES_ENABLED=false (only when a platform ArgoCD exists)
+# 4. projects-argocd → Gitea repo credential. The projects ArgoCD clones tenant
+#    repos over the in-cluster Gitea Service; those repos are ALWAYS private, so
+#    without a credential every project Application fails to sync (no anonymous
+#    fallback). This is an ArgoCD repo-creds template keyed by URL prefix, so one
+#    secret covers every project repo. Least privilege: a dedicated
+#    read:repository token on cvportal, not the all-scopes admin token. Skipped
+#    if the secret already exists (don't clobber a working credential).
+echo "==> projects-argocd Gitea repo credential"
+PROJECTS_ARGOCD_NS="${NSP}projects-argocd"
+GITEA_INTERNAL_URL="http://gitea.${GITEA_NS}.svc.cluster.local/"
+if ! kubectl get ns "$PROJECTS_ARGOCD_NS" >/dev/null 2>&1; then
+  echo "    namespace ${PROJECTS_ARGOCD_NS} absent — install the projects ArgoCD first, then re-run"
+elif kubectl -n "$PROJECTS_ARGOCD_NS" get secret projects-argocd-gitea-repocreds >/dev/null 2>&1; then
+  echo "    already present — skipped"
+else
+  ARGOCD_TOKEN=$(gitea_cli "gitea admin user generate-access-token --username cvportal --token-name corpo-valley-argocd-read --scopes read:repository" | awk -F': ' '/Access token/ {print $2}')
+  [[ -n "$ARGOCD_TOKEN" ]] || { echo "ERROR: argocd repo token mint failed (a token named corpo-valley-argocd-read may already exist on cvportal — delete it in Gitea, then re-run)" >&2; exit 1; }
+  kubectl apply -f - <<YAML
+apiVersion: v1
+kind: Secret
+metadata:
+  name: projects-argocd-gitea-repocreds
+  namespace: ${PROJECTS_ARGOCD_NS}
+  labels:
+    argocd.argoproj.io/secret-type: repo-creds
+type: Opaque
+stringData:
+  type: git
+  url: ${GITEA_INTERNAL_URL}
+  username: cvportal
+  password: ${ARGOCD_TOKEN}
+YAML
+  echo "    created projects-argocd-gitea-repocreds (covers ${GITEA_INTERNAL_URL})"
+fi
+
+# 5. ARGOCD_GIT_MODULES_ENABLED=false (only when a platform ArgoCD exists)
 echo "==> argocd-repo-server submodule init"
 if kubectl -n argocd get deploy argocd-repo-server >/dev/null 2>&1; then
   CURRENT=$(kubectl -n argocd get deploy argocd-repo-server -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ARGOCD_GIT_MODULES_ENABLED")].value}')
