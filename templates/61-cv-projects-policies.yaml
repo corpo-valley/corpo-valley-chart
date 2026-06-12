@@ -9,8 +9,6 @@
 {{- $appProject := $.Values.argocd.projectsArgocd.appProject }}
 {{- $projectsHostSuffix := include "cv.projectsHostSuffix" $ }}
 {{- $oryNs := include "cv.ns" (list $ "ory") }}
-{{- $kratosPublicSvc := include "cv.svc" (list $ "ory-kratos-public" "ory") }}
-{{- $oathkeeperApiSvc := include "cv.svc" (list $ "ory-oathkeeper-api" "ory") }}
 {{- $portalSvc := include "cv.svc" (list $ "portal" "portal") }}
 {{- $nsPrefix := $.Values.namespacePrefix }}
 {{- $platformDenylist := list "default" "argocd" "ingress-nginx" "ingress-controller" }}
@@ -149,16 +147,17 @@ spec:
   validations:
     - expression: "has(object.spec.rules) && object.spec.rules.all(r, has(r.host) && r.host == object.metadata.namespace + '.{{ $projectsHostSuffix }}')"
       messageExpression: "'Project Ingress hosts must all equal ' + object.metadata.namespace + '.{{ $projectsHostSuffix }}'"
-    # The portal /access/site form must be slug-bound: the path's slug MUST equal
-    # this Ingress's own namespace, so a manifest can't gate namespace A's site
-    # behind project B's permission check (finding F7). Use EXACT equality, not
-    # startsWith — a prefix match would let namespace `flappy` point at
-    # `/access/site/flappy-game` (a sibling project). The portal generates the
-    # auth-url as exactly `http://<portal>/access/site/<slug>` with no trailing
-    # slash or query (manifests.ts; PORTAL_INTERNAL_URL strips trailing slashes,
-    # slugs are DNS-1123 labels), so exact match never rejects a legitimate one.
-    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && (object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $kratosPublicSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}/') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'].startsWith('http://{{ $oathkeeperApiSvc }}:') || object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'] == 'http://{{ $portalSvc }}/access/site/' + object.metadata.namespace)"
-      message: "Project Ingress must carry an auth-url annotation pointing at the platform identity gate (Kratos whoami, Oathkeeper decisions, or the portal /access/site/<this-namespace> endpoint)."
+    # The auth-url MUST be the portal access gate bound to this Ingress's own
+    # namespace: exactly `http://<portal>/access/site/<namespace>`. EXACT equality
+    # (not startsWith) so a prefix can't collide — namespace `flappy` can't point
+    # at `/access/site/flappy-game` (a sibling project). The portal emits exactly
+    # this form (manifests.ts / the template ingress; PORTAL_INTERNAL_URL strips
+    # trailing slashes, slugs are DNS-1123 labels), so exact match never rejects a
+    # legitimate one. (Legacy Kratos-whoami / Oathkeeper auth-urls are no longer
+    # accepted — every project the portal generates uses the slug-bound gate, so
+    # a tenant can't select a looser "any signed-in member" gate for its site.)
+    - expression: "has(object.metadata.annotations) && 'nginx.ingress.kubernetes.io/auth-url' in object.metadata.annotations && object.metadata.annotations['nginx.ingress.kubernetes.io/auth-url'] == 'http://{{ $portalSvc }}/access/site/' + object.metadata.namespace"
+      message: "Project Ingress must carry an auth-url annotation equal to http://<portal>/access/site/<this-namespace> (the slug-bound platform identity gate)."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
