@@ -1,0 +1,24 @@
+# Pre-merge guard for chart changes: lint + render so a broken chart can't reach
+# main (where the release workflow would then fail to package it).
+name: Lint Chart
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+      - name: helm lint + template
+        run: |
+          helm lint charts/corpo-valley
+          # cloudflare.tunnelId is required; render to catch template errors.
+          helm template ci charts/corpo-valley \
+            --set cloudflare.tunnelId=00000000-0000-0000-0000-000000000000 >/dev/null
