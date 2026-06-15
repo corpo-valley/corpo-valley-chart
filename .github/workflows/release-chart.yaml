@@ -22,6 +22,7 @@ on:
     branches: [main]
     paths:
       - 'charts/**'
+  workflow_dispatch: {}   # manual re-run / recovery
 
 permissions:
   contents: write   # create GitHub Releases + push the index to gh-pages
@@ -50,6 +51,16 @@ jobs:
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@a0d2dc62c5e491af8ef6ba64a2e02bcf3fb33aa1 # v1.7.0
+        with:
+          # Host the packaged .tgz ON the gh-pages branch instead of attaching it
+          # as a GitHub release asset. This repo has immutable releases enabled,
+          # which blocks chart-releaser's create-release-then-attach-asset flow
+          # (422 "Cannot upload assets to an immutable release"). With this, the
+          # release is just a tag/marker and index.yaml points at the
+          # gh-pages-hosted package, so the Helm repo still works.
+          packages_with_index: true
+          # Don't fail a re-run if a version's release already exists.
+          skip_existing: true
         env:
           CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # charts_dir defaults to 'charts'
