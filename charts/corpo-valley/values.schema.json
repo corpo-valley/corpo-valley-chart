@@ -113,6 +113,23 @@
         "storageMax":  { "type": "string", "description": "Per-project Garage PVC cap enforced by the VAP." }
       }
     },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max":             { "type": "string", "description": "Per-project max memory usage (ResourceQuota limits.memory). Portal receives it as CV_MAX_MEMORY." },
+            "maxRequests":     { "type": "string", "description": "Per-project scheduled memory floor (ResourceQuota requests.memory → CV_MAX_MEMORY_REQUESTS)." },
+            "maxPerContainer": { "type": "string", "description": "Ceiling any single container may request (LimitRange max.memory → CV_MAX_MEMORY_PER_CONTAINER)." },
+            "default":         { "type": "string", "description": "Default memory limit for a new/undeclared container (LimitRange default → CV_DEFAULT_MEMORY)." },
+            "defaultRequest":  { "type": "string", "description": "Default memory request for a new/undeclared container (LimitRange defaultRequest → CV_DEFAULT_MEMORY_REQUEST)." }
+          }
+        }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,

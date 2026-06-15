@@ -65,6 +65,18 @@ blob:
   # Per-project Garage PVC cap (must match the VAP).
   storageMax: "10Gi"
 
+# Per-project memory budget the portal enforces via a ResourceQuota +
+# LimitRange on each project namespace. tenant.memory.max is the headline
+# "max memory usage" per project; owners tune their pods within it and the
+# portal preserves their k8s/deployment.yaml resource edits across changes.
+tenant:
+  memory:
+    max: "8Gi"              # per-project total (ResourceQuota limits.memory)
+    maxRequests: "4Gi"      # per-project scheduled floor (requests.memory)
+    maxPerContainer: "4Gi"  # single-container ceiling (LimitRange max)
+    default: "256Mi"        # default limit for a new/undeclared container
+    defaultRequest: "64Mi"  # default request for a new/undeclared container
+
 # Cluster CIDRs - MUST match the cluster's actual ranges or per-project egress
 # NetworkPolicies will break. Check with `kubectl cluster-info dump | grep -i cidr`.
 cluster:

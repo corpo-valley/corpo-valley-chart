@@ -138,6 +138,32 @@ blob:
   # Per-project Garage PVC cap (must match the VAP).
   storageMax: "10Gi"
 
+# Per-project tenant resource policy.
+# Operator-owned ceilings the portal stamps onto every project namespace as a
+# ResourceQuota (per-project totals) + LimitRange (per-container bounds and the
+# defaults applied to containers that declare nothing). Project owners tune
+# their pods' `resources:` within these bounds by editing k8s/deployment.yaml in
+# their own repo — the portal preserves those edits across capability changes
+# and the apiserver enforces the ceilings. Values are Kubernetes quantities; a
+# malformed value is ignored by the portal (it falls back to the baked default).
+# CPU stays fixed in the portal; only memory is operator-configurable today.
+# NOTE: applied at namespace creation, so a changed ceiling takes effect for
+# NEW projects (existing namespaces keep their quota until recreated).
+tenant:
+  memory:
+    # Per-project max memory usage: total memory limits across all the project's
+    # pods (ResourceQuota limits.memory). The headline knob.
+    max: "4Gi"
+    # Per-project scheduled floor (ResourceQuota requests.memory).
+    maxRequests: "2Gi"
+    # Ceiling any single container may request (LimitRange max.memory).
+    maxPerContainer: "2Gi"
+    # Stamped into a newly added capability container, and the LimitRange limit
+    # default for containers that declare no memory limit.
+    default: "256Mi"
+    # The LimitRange request default and the request stamped into a new container.
+    defaultRequest: "64Mi"
+
 # Ingress controller class.
 ingress:
   className: nginx

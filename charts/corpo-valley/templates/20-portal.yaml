@@ -309,6 +309,20 @@ spec:
             # tenant volumes bind on the same backend as the platform's.
             - name: CV_STORAGE_CLASS
               value: {{ $.Values.storage.className | quote }}
+            # Per-project memory budget. The portal stamps these onto every
+            # tenant namespace as a ResourceQuota (per-project totals) +
+            # LimitRange (per-container bounds + defaults). CV_MAX_MEMORY is the
+            # headline per-project ceiling; owners tune their pods within it.
+            - name: CV_MAX_MEMORY
+              value: {{ $.Values.tenant.memory.max | quote }}
+            - name: CV_MAX_MEMORY_REQUESTS
+              value: {{ $.Values.tenant.memory.maxRequests | quote }}
+            - name: CV_MAX_MEMORY_PER_CONTAINER
+              value: {{ $.Values.tenant.memory.maxPerContainer | quote }}
+            - name: CV_DEFAULT_MEMORY
+              value: {{ $.Values.tenant.memory.default | quote }}
+            - name: CV_DEFAULT_MEMORY_REQUEST
+              value: {{ $.Values.tenant.memory.defaultRequest | quote }}
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: CV_POD_CIDR
