@@ -297,6 +297,18 @@ spec:
             # portal's own service URL for the Build workflow's pin callback.
             - name: CV_REGISTRY
               value: {{ include "cv.svc" (list $ "registry" "registry") }}:5000
+            # Pinned image for per-project Garage (blob) StatefulSets the portal
+            # provisions. MUST match the cv-projects-garage-bounds VAP pin or the
+            # generated StatefulSet is denied at admission.
+            - name: CV_GARAGE_IMAGE
+              value: {{ $.Values.blob.garageImage | quote }}
+            # StorageClass for per-project PVCs (Postgres + Garage). Always set
+            # (possibly empty): the portal treats unset → microk8s default,
+            # set-but-empty → omit storageClassName (cluster default binds),
+            # non-empty → that class. Injecting it from storage.className makes
+            # tenant volumes bind on the same backend as the platform's.
+            - name: CV_STORAGE_CLASS
+              value: {{ $.Values.storage.className | quote }}
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: CV_POD_CIDR

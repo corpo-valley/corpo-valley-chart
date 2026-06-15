@@ -105,6 +105,14 @@
         "registry":    { "type": "string" }
       }
     },
+    "blob": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "garageImage": { "type": "string", "description": "Pinned per-project Garage image. Must match the cv-projects-garage-bounds VAP pin (portal receives it as CV_GARAGE_IMAGE)." },
+        "storageMax":  { "type": "string", "description": "Per-project Garage PVC cap enforced by the VAP." }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,

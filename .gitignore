@@ -2,7 +2,9 @@ out/
 *.local.yaml
 *.local.tgz
 *.tgz
-charts/
+# NOTE: do NOT ignore charts/ — the source chart lives at charts/corpo-valley/.
+# (*.tgz above already ignores packaged output; add charts/*/charts/ here if we
+# ever vendor subchart dependencies.)
 .idea/
 .vscode/
 node_modules/
