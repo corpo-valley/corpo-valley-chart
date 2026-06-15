@@ -1,0 +1,88 @@
+# Publish the Helm chart to the gh-pages Helm repository.
+#
+# Why not helm/chart-releaser-action: this org's posture (immutable releases +
+# a ruleset that restricts ref/tag creation) blocks chart-releaser's
+# create-a-tag-and-release-per-version model. This workflow needs none of that —
+# it only PACKAGES the chart and commits the .tgz + index.yaml to the EXISTING
+# gh-pages branch (an update, not a ref creation), so it works within the org's
+# security controls with no bypasses.
+#
+# Result is the same installable repo consumers already expect:
+#   helm repo add corpo-valley https://corpo-valley.github.io/corpo-valley-chart
+#   helm install corpo-valley corpo-valley/corpo-valley -f my-values.yaml
+#
+# Published versions are immutable: a version whose .tgz already exists on
+# gh-pages is never re-published, so cutting a release == bump
+# charts/<name>/Chart.yaml `version:` and merge to main.
+name: Publish Chart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+  workflow_dispatch: {}   # manual publish / recovery
+
+permissions:
+  contents: write   # commit the package + index to gh-pages
+
+concurrency:
+  group: publish-chart
+  cancel-in-progress: false
+
+env:
+  PAGES_URL: https://corpo-valley.github.io/corpo-valley-chart
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+
+      - name: Package new chart versions and publish to gh-pages
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # Check out the existing gh-pages branch into a sibling worktree.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git fetch origin gh-pages
+          git worktree add -B gh-pages ../ghp origin/gh-pages
+
+          published=""
+          for chart in charts/*/; do
+            [ -f "${chart}Chart.yaml" ] || continue
+            name=$(helm show chart "$chart" | awk '/^name:/{print $2; exit}')
+            version=$(helm show chart "$chart" | awk '/^version:/{print $2; exit}')
+            pkg="${name}-${version}.tgz"
+            if [ -f "../ghp/${pkg}" ]; then
+              echo "::notice::${pkg} already published — skipping (published versions are immutable)."
+              continue
+            fi
+            echo "Packaging ${pkg}"
+            helm package "$chart" -d ../ghp
+            published="${published} ${pkg}"
+          done
+
+          if [ -z "$published" ]; then
+            echo "::notice::No new chart versions to publish."
+            exit 0
+          fi
+
+          # Rebuild the repo index, merging entries for already-published versions.
+          if [ -f ../ghp/index.yaml ]; then
+            helm repo index ../ghp --url "$PAGES_URL" --merge ../ghp/index.yaml
+          else
+            helm repo index ../ghp --url "$PAGES_URL"
+          fi
+
+          cd ../ghp
+          git add -A
+          git commit -m "Publish chart package(s):${published}"
+          # Update of an existing branch (not a ref creation) — allowed by the rulesets.
+          git push origin gh-pages
+          echo "::notice::Published${published} to ${PAGES_URL}"
