@@ -229,6 +229,61 @@ by the install steps above:
   `scripts/setup-node-registry.sh` on each node, and
   `scripts/bootstrap-admin.sh` for the first account.
 
+## Adopting an existing (pre-chart) deployment
+
+If you're moving a deployment that was originally created from raw manifests
+onto this chart, the platform `StatefulSet`s already exist with bound PVCs. A
+`StatefulSet`'s `volumeClaimTemplates` and `podManagementPolicy` are **immutable**
+— the API server rejects an apply that changes them, even when the change is only
+*literal* (e.g. the chart emits an explicit `storageClassName` while the live
+object left it empty and bound to the cluster default). The database keeps
+running on its PVC, but the apply fails, so a GitOps tool (ArgoCD) leaves the
+Application perpetually `OutOfSync` with a `SyncError`.
+
+The chart removes the common case of this for `ory-postgres`:
+
+- `podManagementPolicy` is set explicitly to `OrderedReady` (the value Kubernetes
+  persists by default), so it never differs from a pre-chart object.
+- `storage.oryPostgresClassName` overrides the StorageClass on just the
+  `ory-postgres` volume. **Unset** inherits `storage.className`; set to a class
+  name uses it; set to **empty string** omits `storageClassName` entirely (the
+  cluster default binds). Set it to `""` when your live volumes have an empty
+  `storageClassName` but you still want an explicit `storage.className` elsewhere:
+
+  ```yaml
+  storage:
+    className: microk8s-hostpath   # explicit, for new/other volumes
+    oryPostgresClassName: ""       # match the adopted, pre-chart ory-postgres
+  ```
+
+With those two values matched to the live object, `helm diff` / `kubectl diff`
+is clean and the apply succeeds.
+
+If you cannot match a field (or are adopting another StatefulSet whose template
+differs), the alternative is to leave the immutable field as-is and tell ArgoCD
+to both ignore *and not send* it. Plain `ignoreDifferences` is **not enough** —
+it hides the diff from status but the apply still carries the field, so you also
+need `RespectIgnoreDifferences=true`:
+
+```yaml
+spec:
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: ory-postgres
+      namespace: ory
+      jsonPointers:
+        - /spec/volumeClaimTemplates
+        - /spec/podManagementPolicy
+```
+
+The same immutability applies to the per-project Postgres/Garage StatefulSets the
+portal generates — if a project's StatefulSet pre-exists, match its immutable
+fields the same way.
+
 ## Verifying
 
 ```bash

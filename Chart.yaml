@@ -16,7 +16,7 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.6.0
+version: 0.6.1
 appVersion: "v0.2.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
@@ -39,17 +39,9 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
-    - kind: added
-      description: Login with Google (auth.google.enabled / allowedDomains) — Workspace-domain-restricted OIDC sign-in + auto-provisioning, gated inside Kratos by a data-mapper; client id/secret and the registration webhook secret live in the kratos-google-oidc sealed config fragment, never a ConfigMap
-    - kind: added
-      description: per-project site access control — the portal /access/site gate injects the trusted X-CV-User-Id / X-CV-User-Email / X-CV-Perm headers at the ingress edge; project repos are kept private and member access is granted as Gitea collaborators
-    - kind: added
-      description: post-install now provisions the projects-argocd → Gitea repo credential (a read-only repo-creds template) so ArgoCD can clone the always-private project repos
-    - kind: changed
-      description: MCP deny-list wired explicitly to both portal and mcp-gateway (mcp.denyClientIds); per-project MCP access mirrors site permissions
     - kind: fixed
-      description: gitea web UI no longer redirect-loops to /login (the unsatisfiable services:gitea#access Keto check is replaced by the Kratos session gate); cv-ory→portal:3000 netpol scoped to Kratos pods; the project-ingress auth-url VAP is slug-bound by exact match
-    - kind: security
-      description: generate-secrets.sh hardened (umask 077, --google-client-secret-file); OIDC data-mapper binds the imported email's domain to allowedDomains
-    - kind: changed
-      description: default image tags bumped to the upstream v0.2.0 release
+      description: ory-postgres StatefulSet now sets podManagementPolicy explicitly to OrderedReady (the Kubernetes-persisted default) so it never differs literally from a pre-chart object — removing one of the two immutable-field mismatches that blocked adopting an existing deployment under GitOps
+    - kind: added
+      description: storage.oryPostgresClassName overrides the StorageClass on the ory-postgres volume (unset inherits storage.className, set-but-empty omits the field so the cluster default binds) — lets an adopted, pre-chart ory-postgres render a volumeClaimTemplate matching its existing (immutable) volumes
+    - kind: added
+      description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop

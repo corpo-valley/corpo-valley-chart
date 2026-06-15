@@ -115,6 +115,12 @@ auth:
 #   - "" = use cluster default
 storage:
   className: ""
+  # Per-StatefulSet StorageClass override for ory-postgres. Leave unset to inherit
+  # storage.className. Set to "" to omit storageClassName entirely (the cluster
+  # default binds) — needed when adopting a pre-chart ory-postgres whose live
+  # volumeClaimTemplate has an empty (immutable) storageClassName while you still
+  # want an explicit storage.className for everything else.
+  # oryPostgresClassName: ""
   oryPostgres: 5Gi
   gitea: 10Gi
   registry: 50Gi

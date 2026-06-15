@@ -54,6 +54,12 @@ metadata:
 spec:
   serviceName: ory-postgres
   replicas: 1
+  # Set explicitly to the value Kubernetes persists by default. podManagementPolicy
+  # is immutable; omitting it lets the API server default it to OrderedReady on the
+  # live object, which then differs literally from the chart's (omitted) render and
+  # makes adopting a pre-chart StatefulSet fail to reconcile under GitOps. See README
+  # "Adopting an existing deployment".
+  podManagementPolicy: OrderedReady
   selector:
     matchLabels:
       app: ory-postgres
@@ -130,8 +136,21 @@ spec:
           app: ory-postgres
       spec:
         accessModes: ["ReadWriteOnce"]
-        {{- if $.Values.storage.className }}
-        storageClassName: {{ $.Values.storage.className }}
+        {{- /*
+          volumeClaimTemplates is immutable. Resolve the StorageClass with a
+          per-StatefulSet override so an adopted, pre-chart ory-postgres (whose
+          live volumes may have an empty storageClassName that bound to the
+          cluster default) can render a matching value:
+            unset            -> inherit storage.className
+            set, non-empty   -> that class
+            set to ""        -> omit the field (cluster default binds)
+        */}}
+        {{- $oryClass := $.Values.storage.className }}
+        {{- if hasKey $.Values.storage "oryPostgresClassName" }}
+        {{- $oryClass = $.Values.storage.oryPostgresClassName }}
+        {{- end }}
+        {{- if $oryClass }}
+        storageClassName: {{ $oryClass }}
         {{- end }}
         resources:
           requests:
