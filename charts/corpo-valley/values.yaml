@@ -48,7 +48,7 @@ image:
   registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   pullPolicy: IfNotPresent
-  defaultTag: v0.2.0
+  defaultTag: v0.7.0
   # Name of the imagePullSecret each workload references. Must exist in the
   # workload's namespace; the chart does NOT create it (use kubectl create
   # secret docker-registry, or a sealed secret).
@@ -56,8 +56,8 @@ image:
   # Keys are the literal image/component names (they complete
   # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
   tags:
-    portal: v0.2.0
-    mcp-gateway: v0.2.0
+    portal: v0.7.0
+    mcp-gateway: v0.7.0
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
 # Only needed if you GitOps the platform itself: point it at YOUR deployment
@@ -134,7 +134,7 @@ storage:
 # denied at admission.
 blob:
   # Pinned; built from corpo-valley-main containers/garage.
-  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v1.0.1"
+  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v0.7.0"
   # Per-project Garage PVC cap (must match the VAP).
   storageMax: "10Gi"
 
