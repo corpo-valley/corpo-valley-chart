@@ -16,7 +16,7 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.6.1
+version: 0.6.2
 appVersion: "v0.2.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
@@ -39,6 +39,8 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: fixed
+      description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
     - kind: fixed
       description: ory-postgres StatefulSet now sets podManagementPolicy explicitly to OrderedReady (the Kubernetes-persisted default) so it never differs literally from a pre-chart object — removing one of the two immutable-field mismatches that blocked adopting an existing deployment under GitOps
     - kind: added
