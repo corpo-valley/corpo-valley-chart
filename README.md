@@ -98,10 +98,16 @@ cp values.example.yaml my-values.yaml
 # email.fromAddress — and the sealed-secrets cert pin:
 ./scripts/print-cert-pin.sh   # -> cluster.sealedSecretsCertSha256
 
-helm install corpo-valley . \
+helm install corpo-valley charts/corpo-valley \
   --set cloudflare.tunnelId=<TUNNEL_UUID> \
   -f my-values.yaml
 ```
+
+> Prefer the published chart? Once a release is out you can skip the checkout
+> for the install step itself:
+> `helm repo add corpo-valley https://corpo-valley.github.io/corpo-valley-chart`
+> then `helm install corpo-valley corpo-valley/corpo-valley -f my-values.yaml`.
+> You still need this repo checked out for `scripts/` and the example values.
 
 ### 5. Post-install bootstrap
 
@@ -288,46 +294,66 @@ fields the same way.
 
 ```bash
 # Schema + template:
-helm lint .
-helm template test . --set cloudflare.tunnelId=test-uuid >/tmp/cv.yaml
+helm lint charts/corpo-valley
+helm template test charts/corpo-valley --set cloudflare.tunnelId=test-uuid >/tmp/cv.yaml
 
 # Validate as YAML / k8s schema (requires kubeconform):
 kubeconform -strict -summary -ignore-missing-schemas /tmp/cv.yaml
 
 # Diff against a live cluster:
-helm diff upgrade corpo-valley . -f your-values.yaml
+helm diff upgrade corpo-valley charts/corpo-valley -f your-values.yaml
 ```
+
+CI runs `helm lint` + render on every PR that touches `charts/**`
+(`.github/workflows/lint-chart.yaml`).
 
 ## Layout
 
+The chart lives under `charts/corpo-valley/` (the layout `helm/chart-releaser`
+expects); `scripts/`, the example values, and the docs stay at the repo root.
+
 ```
-Chart.yaml              # chart metadata + version
-values.yaml             # defaults
-values.schema.json      # validated by helm install
-templates/
-  _helpers.tpl          # cv.ns, cv.host, cv.image, cv.svc, cv.labels
-  00-namespaces.yaml    # every cv-* namespace
-  10-ory-*.yaml         # Ory stack (postgres / kratos / hydra / keto / oathkeeper)
-  20-portal.yaml        # portal Deployment + RBAC + Ingresses (incl. MCP)
-  21-mcp-gateway.yaml   # MCP-gateway sidecar Deployment + NetworkPolicies
-  30-gitea.yaml         # gitea Deployment + PVC
-  31-gitea-oidc.yaml    # PostSync hook: hydra client registration
-  32-gitea-runners.yaml # act_runner + dind + egress NetworkPolicy
-  40-registry.yaml      # cv-registry
-  50-cloudflared.yaml   # cloudflare-tunnel Deployment + config
-  60-appprojects.yaml   # AppProject "corpo-valley" + AppProject "projects"
-  61-cv-projects-policies.yaml          # 5 VAPs that fence project ArgoCD writes
-  62-cv-projects-pod-bounds.yaml        # pod-security VAP
-  63-cv-projects-postgres-bounds.yaml   # per-project Postgres VAP
-  64-cv-platform-portal-bounds.yaml     # portal SA PVC-delete fence
-  65-cv-platform-netpols.yaml           # ingress NetworkPolicies on platform svcs
-scripts/
+charts/corpo-valley/      # THE CHART (packaged + released by chart-releaser)
+  Chart.yaml             # chart metadata + version
+  values.yaml            # defaults
+  values.schema.json     # validated by helm install
+  .helmignore
+  templates/
+    _helpers.tpl                          # cv.ns, cv.host, cv.image, cv.svc, cv.labels
+    00-namespaces.yaml                    # every cv-* namespace
+    10-ory-*.yaml                         # Ory stack (postgres/kratos/hydra/keto/oathkeeper)
+    20-portal.yaml                        # portal Deployment + RBAC + Ingresses (incl. MCP)
+    21-mcp-gateway.yaml                   # MCP-gateway Deployment + NetworkPolicies
+    30-gitea.yaml / 31-gitea-oidc.yaml / 32-gitea-runners.yaml
+    40-registry.yaml / 50-cloudflared.yaml / 60-appprojects.yaml
+    61..65-cv-*.yaml                      # VAPs + platform NetworkPolicies that fence projects
+.github/workflows/
+  release-chart.yaml      # chart-releaser: publishes versioned releases on push to main
+  lint-chart.yaml         # helm lint + render on PRs touching charts/**
+scripts/                  # operational tooling (run from the repo, not in the chart package)
   generate-secrets.sh     # mints + optionally seals every Secret the chart needs
   print-cert-pin.sh       # SPKI sha256 pin for cluster.sealedSecretsCertSha256
-  post-install.sh         # Gitea admin/token, OIDC source, runner token, ArgoCD patch
+  post-install.sh         # Gitea admin/token, OIDC source, runner token, ArgoCD repo cred
   setup-node-registry.sh  # per-node kubelet -> cv-registry pull routing
   bootstrap-admin.sh      # creates the first platform admin (registration is disabled)
-values.example.yaml     # an anonymized template you can copy
-values.corpo-valley.yaml # the values for the current corpo-valley.com deploy
-SEALED_SECRETS.md       # what secrets to provision, with what keys
+values.example.yaml       # an anonymized template you can copy
+values.corpo-valley.yaml  # the values for the current corpo-valley.com deploy
+SEALED_SECRETS.md         # what secrets to provision, with what keys
 ```
+
+## Releasing
+
+Releases are automated by [chart-releaser](https://github.com/helm/chart-releaser-action)
+(`.github/workflows/release-chart.yaml`). To cut a release:
+
+1. Bump `version:` in `charts/corpo-valley/Chart.yaml` (and `appVersion:` if the
+   platform images moved — pin the new image tags in `values.yaml`).
+2. Merge to `main`.
+
+On merge, the workflow packages the chart, creates a GitHub Release named
+`corpo-valley-<version>` with the `.tgz` attached, and updates the Helm-repo
+`index.yaml` on the `gh-pages` branch — so the new version is immediately
+installable via `helm repo add corpo-valley https://corpo-valley.github.io/corpo-valley-chart`.
+Already-released versions are skipped, so merges that don't bump the version are
+no-ops. (One-time: enable GitHub Pages with source `gh-pages` / `(root)` after
+the first release runs.)
