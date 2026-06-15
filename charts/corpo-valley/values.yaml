@@ -138,7 +138,7 @@ cluster:
   podCIDR: 10.1.0.0/16
   serviceCIDR: 10.152.183.0/24
   nodeCIDR: 192.168.87.0/24
-  sealedSecretsControllerUrl: http://sealed-secrets-controller.kube-system.svc.cluster.local:8080/v1/cert.pem
+  sealedSecretsControllerUrl: http://sealed-secrets-controller.kube-system.svc.cluster.local:8080
   # SPKI sha256 pin of the sealed-secrets controller cert. REQUIRED for
   # project-secret sealing: the portal runs NODE_ENV=production and refuses
   # trust-on-first-use without an explicit pin. Get it after the controller
