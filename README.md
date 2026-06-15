@@ -309,11 +309,11 @@ CI runs `helm lint` + render on every PR that touches `charts/**`
 
 ## Layout
 
-The chart lives under `charts/corpo-valley/` (the layout `helm/chart-releaser`
-expects); `scripts/`, the example values, and the docs stay at the repo root.
+The chart lives under `charts/corpo-valley/` (one chart per `charts/<name>/`);
+`scripts/`, the example values, and the docs stay at the repo root.
 
 ```
-charts/corpo-valley/      # THE CHART (packaged + released by chart-releaser)
+charts/corpo-valley/      # THE CHART (packaged + published to the gh-pages repo)
   Chart.yaml             # chart metadata + version
   values.yaml            # defaults
   values.schema.json     # validated by helm install
@@ -328,7 +328,7 @@ charts/corpo-valley/      # THE CHART (packaged + released by chart-releaser)
     40-registry.yaml / 50-cloudflared.yaml / 60-appprojects.yaml
     61..65-cv-*.yaml                      # VAPs + platform NetworkPolicies that fence projects
 .github/workflows/
-  release-chart.yaml      # chart-releaser: publishes versioned releases on push to main
+  publish-chart.yaml      # packages + publishes the chart to the gh-pages Helm repo
   lint-chart.yaml         # helm lint + render on PRs touching charts/**
 scripts/                  # operational tooling (run from the repo, not in the chart package)
   generate-secrets.sh     # mints + optionally seals every Secret the chart needs
@@ -343,17 +343,24 @@ SEALED_SECRETS.md         # what secrets to provision, with what keys
 
 ## Releasing
 
-Releases are automated by [chart-releaser](https://github.com/helm/chart-releaser-action)
-(`.github/workflows/release-chart.yaml`). To cut a release:
+The chart is published as a Helm repository on the `gh-pages` branch by
+`.github/workflows/publish-chart.yaml`. To cut a release:
 
 1. Bump `version:` in `charts/corpo-valley/Chart.yaml` (and `appVersion:` if the
    platform images moved — pin the new image tags in `values.yaml`).
 2. Merge to `main`.
 
-On merge, the workflow packages the chart, creates a GitHub Release named
-`corpo-valley-<version>` with the `.tgz` attached, and updates the Helm-repo
-`index.yaml` on the `gh-pages` branch — so the new version is immediately
-installable via `helm repo add corpo-valley https://corpo-valley.github.io/corpo-valley-chart`.
-Already-released versions are skipped, so merges that don't bump the version are
-no-ops. (One-time: enable GitHub Pages with source `gh-pages` / `(root)` after
-the first release runs.)
+On merge, the workflow packages the chart and commits the `.tgz` + a refreshed
+`index.yaml` to `gh-pages`, so the new version is immediately installable:
+
+```
+helm repo add corpo-valley https://corpo-valley.github.io/corpo-valley-chart
+helm repo update && helm install corpo-valley corpo-valley/corpo-valley -f my-values.yaml
+```
+
+Published versions are **immutable** — a version whose `.tgz` already exists on
+`gh-pages` is never overwritten, so merges that don't bump `version:` are no-ops.
+It deliberately creates **no** GitHub Release or git tag (the org restricts ref
+creation and enforces immutable releases; the Helm repo on `gh-pages` is the
+distribution). Use `workflow_dispatch` to re-publish manually. (One-time: GitHub
+Pages must have source = branch `gh-pages` / `(root)`.)
