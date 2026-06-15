@@ -1,0 +1,101 @@
+# Values reproducing the LIVE corpo-valley.com production deployment.
+#
+# Authored for the cv-platform Helm cutover impact diff (READ-ONLY analysis).
+# Mirrors the raw manifests in corpo-valley/k8s/{infra,platform} and the live
+# microk8s cluster (context: microk8s) as of 2026-06-15.
+#
+# Verified against live:
+#   - ingress hosts: portal/auth/oauth/gitea/mcp all *.corpo-valley.com
+#   - namespaces: cv-ory cv-portal cv-gitea cv-gitea-runners cv-registry
+#                 cv-cloudflared cv-platform cv-projects-argocd
+#   - PVCs: ory-postgres 5Gi, gitea 10Gi, registry 20Gi (all microk8s-hostpath)
+#   - portal + mcp-gateway image: feat-blob-storage-20260614-492195d
+#   - Google login: OFF (kratos config has no google/oidc provider)
+#   - MCP_ENFORCE_AUDIENCE: false (live)
+# ----------------------------------------------------------------------------
+
+role: all-in-one
+domain: corpo-valley.com
+namespacePrefix: cv-
+
+# Host keys default to <key>.<domain>; live ingress hosts match exactly, so no
+# overrides are needed. oathkeeperWildcard stays true (live ory-oathkeeper
+# Ingress terminates *.corpo-valley.com).
+hosts:
+  oathkeeperWildcard: true
+
+image:
+  registry: ghcr.io/corpo-valley
+  prefix: corpo-valley-
+  pullPolicy: IfNotPresent
+  pullSecret: ghcr-pull-secret
+  # Per-component pins matching the live pods.
+  tags:
+    portal: feat-blob-storage-20260614-492195d
+    mcp-gateway: feat-blob-storage-20260614-492195d
+
+# Platform GitOps repo the AppProject scopes to (matches the live cv-platform /
+# cv-infra ArgoCD Applications' repoURL).
+git:
+  platformRepoUrl: git@github.com:hashtagcyber/corpo-valley.git
+  platformRepoBranch: main
+
+cloudflare:
+  tunnelId: eb36fca0-1f28-4556-b313-f2d823e7cff2
+  tunnelName: corpo-valley-cluster
+
+email:
+  fromAddress: noreply@dev.cobl.io
+  fromName: Corpo Valley
+
+# Google login is OFF on the live cluster (kratos config exposes only
+# password/code/link methods; no oidc/google provider present).
+auth:
+  google:
+    enabled: false
+    allowedDomains: []
+
+storage:
+  className: microk8s-hostpath
+  oryPostgres: 5Gi
+  gitea: 10Gi
+  registry: 20Gi   # live PVC is 20Gi (chart default is 50Gi — do NOT use it)
+
+# Per-project Garage blob image pinned to the live CV_GARAGE_IMAGE.
+blob:
+  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:feat-blob-storage-20260614-492195d"
+  storageMax: "10Gi"
+
+ingress:
+  className: nginx
+
+cluster:
+  podCIDR: 10.1.0.0/16
+  serviceCIDR: 10.152.183.0/24
+  nodeCIDR: 192.168.87.0/24
+  sealedSecretsCertSha256: a9d59cf74dba2c8a816c2e8def601018ba6f2c4c1dd6146c74857c286f21aebc
+
+argocd:
+  projectsArgocd:
+    enabled: true
+    nsLogical: projects-argocd
+    appProject: projects
+  trustedClientIds: argocd,gitea,claude-code-mcp
+  disableSubmoduleInit: true
+
+mcp:
+  enforceAudience: false
+  denyClientIds: argocd,gitea
+
+scale:
+  kratos: 1
+  hydra: 1
+  keto: 1
+  oathkeeper: 1
+  portal: 1
+  mcpGateway: 1
+  giteaRunner: 1
+  cloudflared: 1
+
+backups:
+  enabled: false

@@ -55,6 +55,16 @@ storage:
   gitea: 20Gi
   registry: 200Gi
 
+# Per-project blob storage (Garage, S3-compatible). The portal provisions an
+# optional per-project Garage StatefulSet, reusing storage.className for its
+# PVC. garageImage MUST match the cv-projects-garage-bounds VAP pin (the portal
+# gets it as CV_GARAGE_IMAGE) or the StatefulSet is denied at admission.
+blob:
+  # Pinned; built from corpo-valley-main containers/garage. Override for a fork.
+  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v1.0.1"
+  # Per-project Garage PVC cap (must match the VAP).
+  storageMax: "10Gi"
+
 # Cluster CIDRs - MUST match the cluster's actual ranges or per-project egress
 # NetworkPolicies will break. Check with `kubectl cluster-info dump | grep -i cidr`.
 cluster:

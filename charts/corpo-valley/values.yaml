@@ -125,6 +125,19 @@ storage:
   gitea: 10Gi
   registry: 50Gi
 
+# Per-project blob storage (Garage, S3-compatible).
+# The portal provisions an optional per-project Garage StatefulSet — the blob
+# analog of the per-project Postgres "database" capability. It reuses
+# storage.className for the PVC; only the image pin and PVC cap live here.
+# garageImage MUST match the pin enforced by the cv-projects-garage-bounds VAP
+# (the portal receives it as CV_GARAGE_IMAGE), or the generated StatefulSet is
+# denied at admission.
+blob:
+  # Pinned; built from corpo-valley-main containers/garage.
+  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v1.0.1"
+  # Per-project Garage PVC cap (must match the VAP).
+  storageMax: "10Gi"
+
 # Ingress controller class.
 ingress:
   className: nginx

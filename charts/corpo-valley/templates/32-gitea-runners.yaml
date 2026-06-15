@@ -31,7 +31,11 @@ data:
       enabled: true
       dir: /data/cache
     container:
-      network: ""
+      # Attach job containers to dind's default bridge (docker0), which carries
+      # the daemon --mtu (see dind args). A per-job network ("") would default to
+      # MTU 1500 and silently drop large downloads on the Calico pod network.
+      # Safe because capacity is 1.
+      network: "bridge"
       privileged: false
       options: ""
       workdir_parent: ""
@@ -110,6 +114,11 @@ spec:
             - "--host=unix:///shared/docker.sock"
             - "--host=tcp://0.0.0.0:2375"
             - "--insecure-registry={{ $registrySvc }}:5000"
+            # MTU at/under the Calico pod-network MTU (microk8s VXLAN ~1450; 1400
+            # is a safe margin). Without this the dind bridge defaults to 1500,
+            # oversized frames are dropped, and large downloads (e.g. the semgrep
+            # wheel in the Scan workflow) hang/time out — failing every build.
+            - "--mtu=1400"
           securityContext:
             privileged: true
           env:
