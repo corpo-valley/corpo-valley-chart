@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.6.2
-appVersion: "v0.2.0"
+version: 0.7.0
+appVersion: "v0.7.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,6 +39,10 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: added
+      description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
+    - kind: changed
+      description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.7.0
     - kind: fixed
       description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
     - kind: fixed
