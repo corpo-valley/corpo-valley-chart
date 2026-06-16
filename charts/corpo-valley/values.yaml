@@ -125,19 +125,6 @@ storage:
   gitea: 10Gi
   registry: 50Gi
 
-# Per-project blob storage (Garage, S3-compatible).
-# The portal provisions an optional per-project Garage StatefulSet — the blob
-# analog of the per-project Postgres "database" capability. It reuses
-# storage.className for the PVC; only the image pin and PVC cap live here.
-# garageImage MUST match the pin enforced by the cv-projects-garage-bounds VAP
-# (the portal receives it as CV_GARAGE_IMAGE), or the generated StatefulSet is
-# denied at admission.
-blob:
-  # Pinned; built from corpo-valley-main containers/garage.
-  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v0.7.0"
-  # Per-project Garage PVC cap (must match the VAP).
-  storageMax: "10Gi"
-
 # Per-project tenant resource policy.
 # Operator-owned ceilings the portal stamps onto every project namespace as a
 # ResourceQuota (per-project totals) + LimitRange (per-container bounds and the
@@ -172,12 +159,18 @@ tenant:
     default: "500m"           # LimitRange default + new-container limit
     defaultRequest: "50m"     # LimitRange defaultRequest + new-container request
   storage:
-    # Size of each capability's data volume (Postgres/Garage PVC) at provision.
+    # The single source of truth for per-project storage sizing — applies to
+    # every stateful capability (Postgres + Garage) uniformly.
+    # Size of each capability's data volume at provision (volumeClaimTemplate).
     default: "5Gi"
-    # ResourceQuota requests.storage — the SUM of every PVC in the namespace.
-    # Growing a volume past `default` needs this raised too. Online growth needs
-    # an expandable StorageClass; otherwise see the portal's storage help page.
-    max: "10Gi"
+    # Per-VOLUME admission cap (CV_MAX_PVC_SIZE). The cv-projects-*-bounds VAPs
+    # reject any single PVC larger than this, and the portal refuses to grow a
+    # volume past it. Online growth additionally needs an expandable StorageClass
+    # (otherwise see the portal's storage help page). Must be ≥ default.
+    maxPerVolume: "10Gi"
+    # Per-NAMESPACE total (ResourceQuota requests.storage) — the SUM of every PVC
+    # in the project. Should be ≥ maxPerVolume × (number of stateful capabilities).
+    maxTotal: "20Gi"
   pods:
     # ResourceQuota pods — max pods per project namespace.
     max: "12"
@@ -186,6 +179,16 @@ tenant:
     # via their repo, which ArgoCD syncs). Must be ≥ the number of stateful
     # capabilities (Postgres + Garage = 2).
     max: "3"
+  # Per-project stateful capabilities, configured uniformly. Each `image` is
+  # both stamped into the generated StatefulSet (via the portal) AND pinned by
+  # that capability's cv-projects-<name>-bounds VAP, so the two cannot drift —
+  # they are the same value. Postgres pulls from upstream; Garage is built from
+  # corpo-valley-main containers/garage.
+  capabilities:
+    postgres:
+      image: "postgres:16-alpine"            # → CV_POSTGRES_IMAGE + postgres VAP pin
+    garage:
+      image: "ghcr.io/corpo-valley/corpo-valley-garage:v0.7.0"  # → CV_GARAGE_IMAGE + garage VAP pin
 
 # Ingress controller class.
 ingress:

@@ -105,14 +105,6 @@
         "registry":    { "type": "string" }
       }
     },
-    "blob": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "garageImage": { "type": "string", "description": "Pinned per-project Garage image. Must match the cv-projects-garage-bounds VAP pin (portal receives it as CV_GARAGE_IMAGE)." },
-        "storageMax":  { "type": "string", "description": "Per-project Garage PVC cap enforced by the VAP." }
-      }
-    },
     "tenant": {
       "type": "object",
       "additionalProperties": false,
@@ -143,8 +135,9 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "default": { "type": "string", "description": "Size of each capability data volume at provision (Postgres/Garage PVC → CV_DEFAULT_STORAGE)." },
-            "max":     { "type": "string", "description": "Per-project total storage (ResourceQuota requests.storage → CV_MAX_STORAGE)." }
+            "default":      { "type": "string", "description": "Size of each capability data volume at provision (volumeClaimTemplate → CV_DEFAULT_STORAGE)." },
+            "maxPerVolume": { "type": "string", "description": "Per-volume admission cap — drives the cv-projects-*-bounds VAPs and the portal's grow pre-check (→ CV_MAX_PVC_SIZE)." },
+            "maxTotal":     { "type": "string", "description": "Per-namespace total storage (ResourceQuota requests.storage, sum of all PVCs → CV_MAX_STORAGE)." }
           }
         },
         "pods": {
@@ -159,6 +152,27 @@
           "additionalProperties": false,
           "properties": {
             "max": { "type": "string", "description": "Max PersistentVolumeClaims per project namespace (ResourceQuota persistentvolumeclaims → CV_MAX_PVCS)." }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-project stateful capabilities, configured uniformly. Each image is stamped into the StatefulSet AND pinned by that capability's VAP.",
+          "properties": {
+            "postgres": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": { "type": "string", "description": "Pinned Postgres image (→ CV_POSTGRES_IMAGE + cv-projects-postgres-bounds VAP pin)." }
+              }
+            },
+            "garage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": { "type": "string", "description": "Pinned Garage image (→ CV_GARAGE_IMAGE + cv-projects-garage-bounds VAP pin)." }
+              }
+            }
           }
         }
       }
@@ -187,7 +201,24 @@
       }
     },
     "resources": {
-      "type": "object"
+      "type": "object",
+      "description": "Per platform-component CPU/memory. Keyed by component name; each value is a requests/limits pair.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "cpu": { "type": "string" }, "memory": { "type": "string" } }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "cpu": { "type": ["string", "integer"] }, "memory": { "type": "string" } }
+          }
+        }
+      }
     },
     "scale": {
       "type": "object",

@@ -297,11 +297,14 @@ spec:
             # portal's own service URL for the Build workflow's pin callback.
             - name: CV_REGISTRY
               value: {{ include "cv.svc" (list $ "registry" "registry") }}:5000
-            # Pinned image for per-project Garage (blob) StatefulSets the portal
-            # provisions. MUST match the cv-projects-garage-bounds VAP pin or the
-            # generated StatefulSet is denied at admission.
+            # Pinned images for the per-project stateful capabilities the portal
+            # provisions (Postgres + Garage StatefulSets). Each MUST match the
+            # corresponding cv-projects-<name>-bounds VAP pin — they read the same
+            # tenant.capabilities.<name>.image value, so they cannot drift.
+            - name: CV_POSTGRES_IMAGE
+              value: {{ $.Values.tenant.capabilities.postgres.image | quote }}
             - name: CV_GARAGE_IMAGE
-              value: {{ $.Values.blob.garageImage | quote }}
+              value: {{ $.Values.tenant.capabilities.garage.image | quote }}
             # StorageClass for per-project PVCs (Postgres + Garage). Always set
             # (possibly empty): the portal treats unset → microk8s default,
             # set-but-empty → omit storageClassName (cluster default binds),
@@ -334,13 +337,17 @@ spec:
               value: {{ $.Values.tenant.cpu.default | quote }}
             - name: CV_DEFAULT_CPU_REQUEST
               value: {{ $.Values.tenant.cpu.defaultRequest | quote }}
-            # Per-project storage: CV_DEFAULT_STORAGE sizes each capability's data
-            # volume at provision; CV_MAX_STORAGE is the ResourceQuota
-            # requests.storage ceiling (sum of all PVCs).
+            # Per-project storage (single source of truth: tenant.storage).
+            # CV_DEFAULT_STORAGE sizes each capability's data volume at provision;
+            # CV_MAX_PVC_SIZE is the per-volume admission cap the portal pre-checks
+            # before a grow (matches the cv-projects-*-bounds VAPs); CV_MAX_STORAGE
+            # is the ResourceQuota requests.storage ceiling (sum of all PVCs).
             - name: CV_DEFAULT_STORAGE
               value: {{ $.Values.tenant.storage.default | quote }}
+            - name: CV_MAX_PVC_SIZE
+              value: {{ $.Values.tenant.storage.maxPerVolume | quote }}
             - name: CV_MAX_STORAGE
-              value: {{ $.Values.tenant.storage.max | quote }}
+              value: {{ $.Values.tenant.storage.maxTotal | quote }}
             # Per-project object counts (ResourceQuota pods / PVCs).
             - name: CV_MAX_PODS
               value: {{ $.Values.tenant.pods.max | quote }}
