@@ -76,6 +76,19 @@ tenant:
     maxPerContainer: "4Gi"  # single-container ceiling (LimitRange max)
     default: "256Mi"        # default limit for a new/undeclared container
     defaultRequest: "64Mi"  # default request for a new/undeclared container
+  cpu:
+    max: "8"                # per-project total (ResourceQuota limits.cpu)
+    maxRequests: "4"        # per-project scheduled floor (requests.cpu)
+    maxPerContainer: "4"    # single-container ceiling (LimitRange max)
+    default: "500m"         # default limit for a new/undeclared container
+    defaultRequest: "50m"   # default request for a new/undeclared container
+  storage:
+    default: "5Gi"          # size of each capability data volume at provision
+    max: "20Gi"             # ResourceQuota requests.storage (sum of all PVCs)
+  pods:
+    max: "12"               # ResourceQuota pods
+  pvcs:
+    max: "4"                # ResourceQuota persistentvolumeclaims (≥ 2)
 
 # Cluster CIDRs - MUST match the cluster's actual ranges or per-project egress
 # NetworkPolicies will break. Check with `kubectl cluster-info dump | grep -i cidr`.

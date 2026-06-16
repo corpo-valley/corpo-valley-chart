@@ -323,6 +323,29 @@ spec:
               value: {{ $.Values.tenant.memory.default | quote }}
             - name: CV_DEFAULT_MEMORY_REQUEST
               value: {{ $.Values.tenant.memory.defaultRequest | quote }}
+            # Per-project CPU budget (twin of memory above).
+            - name: CV_MAX_CPU
+              value: {{ $.Values.tenant.cpu.max | quote }}
+            - name: CV_MAX_CPU_REQUESTS
+              value: {{ $.Values.tenant.cpu.maxRequests | quote }}
+            - name: CV_MAX_CPU_PER_CONTAINER
+              value: {{ $.Values.tenant.cpu.maxPerContainer | quote }}
+            - name: CV_DEFAULT_CPU
+              value: {{ $.Values.tenant.cpu.default | quote }}
+            - name: CV_DEFAULT_CPU_REQUEST
+              value: {{ $.Values.tenant.cpu.defaultRequest | quote }}
+            # Per-project storage: CV_DEFAULT_STORAGE sizes each capability's data
+            # volume at provision; CV_MAX_STORAGE is the ResourceQuota
+            # requests.storage ceiling (sum of all PVCs).
+            - name: CV_DEFAULT_STORAGE
+              value: {{ $.Values.tenant.storage.default | quote }}
+            - name: CV_MAX_STORAGE
+              value: {{ $.Values.tenant.storage.max | quote }}
+            # Per-project object counts (ResourceQuota pods / PVCs).
+            - name: CV_MAX_PODS
+              value: {{ $.Values.tenant.pods.max | quote }}
+            - name: CV_MAX_PVCS
+              value: {{ $.Values.tenant.pvcs.max | quote }}
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: CV_POD_CIDR

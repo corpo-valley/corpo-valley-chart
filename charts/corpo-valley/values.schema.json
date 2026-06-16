@@ -127,6 +127,39 @@
             "default":         { "type": "string", "description": "Default memory limit for a new/undeclared container (LimitRange default → CV_DEFAULT_MEMORY)." },
             "defaultRequest":  { "type": "string", "description": "Default memory request for a new/undeclared container (LimitRange defaultRequest → CV_DEFAULT_MEMORY_REQUEST)." }
           }
+        },
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max":             { "type": "string", "description": "Per-project max CPU (ResourceQuota limits.cpu → CV_MAX_CPU)." },
+            "maxRequests":     { "type": "string", "description": "Per-project scheduled CPU floor (ResourceQuota requests.cpu → CV_MAX_CPU_REQUESTS)." },
+            "maxPerContainer": { "type": "string", "description": "Ceiling any single container may request (LimitRange max.cpu → CV_MAX_CPU_PER_CONTAINER)." },
+            "default":         { "type": "string", "description": "Default CPU limit for a new/undeclared container (LimitRange default → CV_DEFAULT_CPU)." },
+            "defaultRequest":  { "type": "string", "description": "Default CPU request for a new/undeclared container (LimitRange defaultRequest → CV_DEFAULT_CPU_REQUEST)." }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default": { "type": "string", "description": "Size of each capability data volume at provision (Postgres/Garage PVC → CV_DEFAULT_STORAGE)." },
+            "max":     { "type": "string", "description": "Per-project total storage (ResourceQuota requests.storage → CV_MAX_STORAGE)." }
+          }
+        },
+        "pods": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max": { "type": "string", "description": "Max pods per project namespace (ResourceQuota pods → CV_MAX_PODS)." }
+          }
+        },
+        "pvcs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max": { "type": "string", "description": "Max PersistentVolumeClaims per project namespace (ResourceQuota persistentvolumeclaims → CV_MAX_PVCS)." }
+          }
         }
       }
     },

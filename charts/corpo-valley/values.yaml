@@ -146,9 +146,10 @@ blob:
 # their own repo — the portal preserves those edits across capability changes
 # and the apiserver enforces the ceilings. Values are Kubernetes quantities; a
 # malformed value is ignored by the portal (it falls back to the baked default).
-# CPU stays fixed in the portal; only memory is operator-configurable today.
-# NOTE: applied at namespace creation, so a changed ceiling takes effect for
-# NEW projects (existing namespaces keep their quota until recreated).
+# NOTE: ceilings are applied at namespace creation, so a changed value takes
+# effect for NEW projects; an admin pushes it onto an existing project from the
+# portal's Project Resources page (which also grows data volumes). Per-project
+# overrides are up-only — an admin may raise a project above these, not below.
 tenant:
   memory:
     # Per-project max memory usage: total memory limits across all the project's
@@ -163,6 +164,28 @@ tenant:
     default: "256Mi"
     # The LimitRange request default and the request stamped into a new container.
     defaultRequest: "64Mi"
+  cpu:
+    # CPU twin of memory. Quantities in cores (e.g. "2") or millicores ("500m").
+    max: "4"                  # ResourceQuota limits.cpu
+    maxRequests: "2"          # ResourceQuota requests.cpu
+    maxPerContainer: "2"      # LimitRange max.cpu
+    default: "500m"           # LimitRange default + new-container limit
+    defaultRequest: "50m"     # LimitRange defaultRequest + new-container request
+  storage:
+    # Size of each capability's data volume (Postgres/Garage PVC) at provision.
+    default: "5Gi"
+    # ResourceQuota requests.storage — the SUM of every PVC in the namespace.
+    # Growing a volume past `default` needs this raised too. Online growth needs
+    # an expandable StorageClass; otherwise see the portal's storage help page.
+    max: "10Gi"
+  pods:
+    # ResourceQuota pods — max pods per project namespace.
+    max: "12"
+  pvcs:
+    # ResourceQuota persistentvolumeclaims — caps PVCs (incl. any an owner adds
+    # via their repo, which ArgoCD syncs). Must be ≥ the number of stateful
+    # capabilities (Postgres + Garage = 2).
+    max: "3"
 
 # Ingress controller class.
 ingress:
