@@ -61,10 +61,14 @@ storage:
   gitea: 10Gi
   registry: 20Gi   # live PVC is 20Gi (chart default is 50Gi — do NOT use it)
 
-# Per-project Garage blob image pinned to the live CV_GARAGE_IMAGE.
-blob:
-  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:feat-blob-storage-20260614-492195d"
-  storageMax: "10Gi"
+# Per-project stateful-capability config (replaces the retired `blob:` block).
+# Garage image pinned to the live CV_GARAGE_IMAGE; per-volume cap was blob.storageMax.
+tenant:
+  storage:
+    maxPerVolume: "10Gi"
+  capabilities:
+    garage:
+      image: "ghcr.io/corpo-valley/corpo-valley-garage:feat-blob-storage-20260614-492195d"
 
 ingress:
   className: nginx

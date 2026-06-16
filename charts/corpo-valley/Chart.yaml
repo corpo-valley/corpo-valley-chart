@@ -17,7 +17,7 @@ description: |
 
 type: application
 version: 0.8.0
-appVersion: "v0.7.0"
+appVersion: "v0.8.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -40,9 +40,17 @@ keywords:
 annotations:
   artifacthub.io/changes: |
     - kind: added
+      description: per-project CPU / storage / pod / PVC budgets — operator-tunable via tenant.{cpu,storage,pods,pvcs}.* (injected as CV_* env) and per-project raisable by an admin from the portal's Project Resources page; complements the existing tenant.memory.* knobs
+    - kind: changed
+      description: "BREAKING: retired the top-level `blob:` section — per-project Garage config moved to tenant.capabilities.garage.image and the per-volume storage cap to tenant.storage.maxPerVolume. Update any values files that set blob.garageImage / blob.storageMax."
+    - kind: added
+      description: tenant.capabilities.{postgres,garage}.image pin each per-project StatefulSet AND its cv-projects-<name>-bounds admission policy from a single value (the Postgres image is now chart-configurable, pinned to one image)
+    - kind: changed
+      description: the two near-identical per-capability ValidatingAdmissionPolicies collapsed into a shared cv.capabilityBounds helper; the per-volume storage cap (tenant.storage.maxPerVolume) now drives both
+    - kind: added
       description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
     - kind: changed
-      description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.7.0
+      description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.8.0
     - kind: fixed
       description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
     - kind: fixed
