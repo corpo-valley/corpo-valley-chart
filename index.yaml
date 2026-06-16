@@ -4,6 +4,62 @@ entries:
   - annotations:
       artifacthub.io/changes: |
         - kind: added
+          description: per-project CPU / storage / pod / PVC budgets — operator-tunable via tenant.{cpu,storage,pods,pvcs}.* (injected as CV_* env) and per-project raisable by an admin from the portal's Project Resources page; complements the existing tenant.memory.* knobs
+        - kind: changed
+          description: "BREAKING: retired the top-level `blob:` section — per-project Garage config moved to tenant.capabilities.garage.image and the per-volume storage cap to tenant.storage.maxPerVolume. Update any values files that set blob.garageImage / blob.storageMax."
+        - kind: added
+          description: tenant.capabilities.{postgres,garage}.image pin each per-project StatefulSet AND its cv-projects-<name>-bounds admission policy from a single value (the Postgres image is now chart-configurable, pinned to one image)
+        - kind: changed
+          description: the two near-identical per-capability ValidatingAdmissionPolicies collapsed into a shared cv.capabilityBounds helper; the per-volume storage cap (tenant.storage.maxPerVolume) now drives both
+        - kind: added
+          description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
+        - kind: changed
+          description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.8.0
+        - kind: fixed
+          description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
+        - kind: fixed
+          description: ory-postgres StatefulSet now sets podManagementPolicy explicitly to OrderedReady (the Kubernetes-persisted default) so it never differs literally from a pre-chart object — removing one of the two immutable-field mismatches that blocked adopting an existing deployment under GitOps
+        - kind: added
+          description: storage.oryPostgresClassName overrides the StorageClass on the ory-postgres volume (unset inherits storage.className, set-but-empty omits the field so the cluster default binds) — lets an adopted, pre-chart ory-postgres render a volumeClaimTemplate matching its existing (immutable) volumes
+        - kind: added
+          description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
+    apiVersion: v2
+    appVersion: v0.8.0
+    created: "2026-06-16T20:34:45.920929538Z"
+    description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
+      platform that abstracts code + infra so non-technical users can drive Claude
+      Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
+      registry, MCP gateway, and the per-project bounds (VAPs / AppProjects / NetworkPolicies).  Platform
+      images are built from github.com/corpo-valley/corpo-valley-main and published
+      to ghcr.io/corpo-valley/corpo-valley-*. This chart references them via values
+      but does not require any source from the build repo.  Phase 1 ships `role: all-in-one`
+      — one cluster, single platform instance. The `role: platform` / `role: tenants`
+      modes are scaffolded for a future platform/tenants cluster split but are not
+      yet rendered by this version. '
+    digest: 2a66ceb8cfaa858946bb634a96717272bb53f9c8c8fbe484a198d6f39735a709
+    home: https://github.com/corpo-valley/corpo-valley-main
+    keywords:
+    - ory
+    - kratos
+    - hydra
+    - argocd
+    - gitops
+    - mcp
+    - claude-code
+    maintainers:
+    - name: corpo-valley
+      url: https://github.com/corpo-valley
+    name: corpo-valley
+    sources:
+    - https://github.com/corpo-valley/corpo-valley-main
+    - https://github.com/corpo-valley/corpo-valley-chart
+    type: application
+    urls:
+    - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.8.0.tgz
+    version: 0.8.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
           description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
         - kind: changed
           description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.7.0
@@ -49,4 +105,4 @@ entries:
     urls:
     - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.7.0.tgz
     version: 0.7.0
-generated: "2026-06-15T18:41:57.459391775Z"
+generated: "2026-06-16T20:34:45.919245081Z"
