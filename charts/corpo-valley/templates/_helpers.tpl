@@ -100,3 +100,80 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 {{- $r := .Values.role -}}
 {{- if or (eq $r "all-in-one") (eq $r "tenants") -}}true{{- end -}}
 {{- end -}}
+
+{{/*
+  Admission bounds for ONE per-project stateful capability (Postgres, Garage, …).
+  Both per-capability VAPs were ~90% identical; this is the single source so a
+  new capability is one call, not a copied 60-line file. Caller passes a dict:
+    ctx          – the root context ($)
+    name         – capability name == the corpo-valley.com/managed label value
+                   (also the VAP name suffix); title-cased in messages.
+    image        – the single pinned image the StatefulSet's container must use.
+    maxPerVolume – the per-PVC storage ceiling (tenant.storage.maxPerVolume).
+  Emits the ValidatingAdmissionPolicy + binding. Fires only on StatefulSets the
+  projects-argocd controller creates that carry the managed=<name> label.
+*/}}
+{{- define "cv.capabilityBounds" -}}
+{{- $ctx := .ctx -}}
+{{- $name := .name -}}
+{{- $image := .image -}}
+{{- $maxPerVolume := .maxPerVolume -}}
+{{- $display := title $name -}}
+{{- $projectsArgocdNs := include "cv.ns" (list $ctx $ctx.Values.argocd.projectsArgocd.nsLogical) -}}
+{{- $controllerSa := printf "system:serviceaccount:%s:argocd-application-controller" $projectsArgocdNs -}}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cv-projects-{{ $name }}-bounds
+  labels:
+    {{- include "cv.labels" $ctx | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["statefulsets"]
+  matchConditions:
+    - name: only-projects-argocd-controller
+      expression: "request.userInfo.username == '{{ $controllerSa }}'"
+    - name: only-managed-{{ $name }}
+      expression: "has(object.metadata.labels) && 'corpo-valley.com/managed' in object.metadata.labels && object.metadata.labels['corpo-valley.com/managed'] == '{{ $name }}'"
+  validations:
+    - expression: "has(object.spec.replicas) && object.spec.replicas == 1"
+      message: "Project-managed {{ $display }} must have replicas: 1 (HA not supported on this tier)."
+    - expression: "object.spec.template.spec.containers.size() == 1"
+      message: "Project-managed {{ $display }} pod must have exactly one container (no sidecars on this tier)."
+    - expression: "object.spec.template.spec.containers.all(c, c.image == '{{ $image }}')"
+      message: "Project-managed {{ $display }} image must be {{ $image }} (image pinning gate)."
+    - expression: "object.spec.template.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || c.securityContext.privileged == false)"
+      message: "Project-managed {{ $display }} containers must not be privileged."
+    - expression: "object.spec.template.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.allowPrivilegeEscalation) || c.securityContext.allowPrivilegeEscalation == false)"
+      message: "Project-managed {{ $display }} containers must not allowPrivilegeEscalation."
+    - expression: "has(object.spec.template.spec.securityContext) && has(object.spec.template.spec.securityContext.runAsNonRoot) && object.spec.template.spec.securityContext.runAsNonRoot == true"
+      message: "Project-managed {{ $display }} must set pod securityContext.runAsNonRoot=true."
+    - expression: "object.spec.template.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.capabilities) && has(c.securityContext.capabilities.drop) && c.securityContext.capabilities.drop.exists(d, d == 'ALL'))"
+      message: "Project-managed {{ $display }} containers must drop ALL capabilities."
+    - expression: "!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false"
+      message: "Project-managed {{ $display }} must not use hostNetwork."
+    - expression: "!has(object.spec.template.spec.hostPID) || object.spec.template.spec.hostPID == false"
+      message: "Project-managed {{ $display }} must not use hostPID."
+    - expression: "!has(object.spec.template.spec.hostIPC) || object.spec.template.spec.hostIPC == false"
+      message: "Project-managed {{ $display }} must not use hostIPC."
+    - expression: "!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))"
+      message: "Project-managed {{ $display }} must not mount hostPath volumes."
+    - expression: "object.spec.volumeClaimTemplates.all(t, !quantity(t.spec.resources.requests.storage).isGreaterThan(quantity('{{ $maxPerVolume }}')))"
+      message: "Project-managed {{ $display }} storage must be <= {{ $maxPerVolume }} (per-volume cap)."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cv-projects-{{ $name }}-bounds
+  labels:
+    {{- include "cv.labels" $ctx | nindent 4 }}
+spec:
+  policyName: cv-projects-{{ $name }}-bounds
+  validationActions: [Deny]
+{{- end -}}

@@ -55,15 +55,39 @@ storage:
   gitea: 20Gi
   registry: 200Gi
 
-# Per-project blob storage (Garage, S3-compatible). The portal provisions an
-# optional per-project Garage StatefulSet, reusing storage.className for its
-# PVC. garageImage MUST match the cv-projects-garage-bounds VAP pin (the portal
-# gets it as CV_GARAGE_IMAGE) or the StatefulSet is denied at admission.
-blob:
-  # Pinned; built from corpo-valley-main containers/garage. Override for a fork.
-  garageImage: "ghcr.io/corpo-valley/corpo-valley-garage:v1.0.1"
-  # Per-project Garage PVC cap (must match the VAP).
-  storageMax: "10Gi"
+# Per-project resource policy the portal enforces via a ResourceQuota +
+# LimitRange on each project namespace, plus the per-capability image pins.
+# tenant.memory.max is the headline "max memory usage" per project; owners tune
+# their pods within these bounds and the portal preserves their
+# k8s/deployment.yaml resource edits across changes.
+tenant:
+  memory:
+    max: "8Gi"              # per-project total (ResourceQuota limits.memory)
+    maxRequests: "4Gi"      # per-project scheduled floor (requests.memory)
+    maxPerContainer: "4Gi"  # single-container ceiling (LimitRange max)
+    default: "256Mi"        # default limit for a new/undeclared container
+    defaultRequest: "64Mi"  # default request for a new/undeclared container
+  cpu:
+    max: "8"                # per-project total (ResourceQuota limits.cpu)
+    maxRequests: "4"        # per-project scheduled floor (requests.cpu)
+    maxPerContainer: "4"    # single-container ceiling (LimitRange max)
+    default: "500m"         # default limit for a new/undeclared container
+    defaultRequest: "50m"   # default request for a new/undeclared container
+  storage:
+    default: "5Gi"          # provision size of each capability data volume
+    maxPerVolume: "10Gi"    # per-volume admission cap (VAPs + portal grow check)
+    maxTotal: "40Gi"        # ResourceQuota requests.storage (sum of all PVCs)
+  pods:
+    max: "12"               # ResourceQuota pods
+  pvcs:
+    max: "4"                # ResourceQuota persistentvolumeclaims (≥ 2)
+  # Per-project stateful capability images — each pins both the StatefulSet and
+  # its cv-projects-<name>-bounds VAP. Override garage.image for a fork.
+  capabilities:
+    postgres:
+      image: "postgres:16-alpine"
+    garage:
+      image: "ghcr.io/corpo-valley/corpo-valley-garage:v1.0.1"
 
 # Cluster CIDRs - MUST match the cluster's actual ranges or per-project egress
 # NetworkPolicies will break. Check with `kubectl cluster-info dump | grep -i cidr`.

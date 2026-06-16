@@ -297,11 +297,14 @@ spec:
             # portal's own service URL for the Build workflow's pin callback.
             - name: CV_REGISTRY
               value: {{ include "cv.svc" (list $ "registry" "registry") }}:5000
-            # Pinned image for per-project Garage (blob) StatefulSets the portal
-            # provisions. MUST match the cv-projects-garage-bounds VAP pin or the
-            # generated StatefulSet is denied at admission.
+            # Pinned images for the per-project stateful capabilities the portal
+            # provisions (Postgres + Garage StatefulSets). Each MUST match the
+            # corresponding cv-projects-<name>-bounds VAP pin — they read the same
+            # tenant.capabilities.<name>.image value, so they cannot drift.
+            - name: CV_POSTGRES_IMAGE
+              value: {{ $.Values.tenant.capabilities.postgres.image | quote }}
             - name: CV_GARAGE_IMAGE
-              value: {{ $.Values.blob.garageImage | quote }}
+              value: {{ $.Values.tenant.capabilities.garage.image | quote }}
             # StorageClass for per-project PVCs (Postgres + Garage). Always set
             # (possibly empty): the portal treats unset → microk8s default,
             # set-but-empty → omit storageClassName (cluster default binds),
@@ -309,6 +312,47 @@ spec:
             # tenant volumes bind on the same backend as the platform's.
             - name: CV_STORAGE_CLASS
               value: {{ $.Values.storage.className | quote }}
+            # Per-project memory budget. The portal stamps these onto every
+            # tenant namespace as a ResourceQuota (per-project totals) +
+            # LimitRange (per-container bounds + defaults). CV_MAX_MEMORY is the
+            # headline per-project ceiling; owners tune their pods within it.
+            - name: CV_MAX_MEMORY
+              value: {{ $.Values.tenant.memory.max | quote }}
+            - name: CV_MAX_MEMORY_REQUESTS
+              value: {{ $.Values.tenant.memory.maxRequests | quote }}
+            - name: CV_MAX_MEMORY_PER_CONTAINER
+              value: {{ $.Values.tenant.memory.maxPerContainer | quote }}
+            - name: CV_DEFAULT_MEMORY
+              value: {{ $.Values.tenant.memory.default | quote }}
+            - name: CV_DEFAULT_MEMORY_REQUEST
+              value: {{ $.Values.tenant.memory.defaultRequest | quote }}
+            # Per-project CPU budget (twin of memory above).
+            - name: CV_MAX_CPU
+              value: {{ $.Values.tenant.cpu.max | quote }}
+            - name: CV_MAX_CPU_REQUESTS
+              value: {{ $.Values.tenant.cpu.maxRequests | quote }}
+            - name: CV_MAX_CPU_PER_CONTAINER
+              value: {{ $.Values.tenant.cpu.maxPerContainer | quote }}
+            - name: CV_DEFAULT_CPU
+              value: {{ $.Values.tenant.cpu.default | quote }}
+            - name: CV_DEFAULT_CPU_REQUEST
+              value: {{ $.Values.tenant.cpu.defaultRequest | quote }}
+            # Per-project storage (single source of truth: tenant.storage).
+            # CV_DEFAULT_STORAGE sizes each capability's data volume at provision;
+            # CV_MAX_PVC_SIZE is the per-volume admission cap the portal pre-checks
+            # before a grow (matches the cv-projects-*-bounds VAPs); CV_MAX_STORAGE
+            # is the ResourceQuota requests.storage ceiling (sum of all PVCs).
+            - name: CV_DEFAULT_STORAGE
+              value: {{ $.Values.tenant.storage.default | quote }}
+            - name: CV_MAX_PVC_SIZE
+              value: {{ $.Values.tenant.storage.maxPerVolume | quote }}
+            - name: CV_MAX_STORAGE
+              value: {{ $.Values.tenant.storage.maxTotal | quote }}
+            # Per-project object counts (ResourceQuota pods / PVCs).
+            - name: CV_MAX_PODS
+              value: {{ $.Values.tenant.pods.max | quote }}
+            - name: CV_MAX_PVCS
+              value: {{ $.Values.tenant.pvcs.max | quote }}
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: CV_POD_CIDR

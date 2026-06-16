@@ -1,63 +1,13 @@
 {{/*
   Per-project Garage bounds. Fires only on StatefulSets labeled
   corpo-valley.com/managed=garage (set by the projects-argocd controller).
+  All rules live in the shared cv.capabilityBounds helper (_helpers.tpl) so
+  Garage and Postgres cannot drift; only the name/image/cap differ.
 */}}
 {{- if include "cv.role.tenants" . }}
-{{- $projectsArgocdNs := include "cv.ns" (list $ $.Values.argocd.projectsArgocd.nsLogical) }}
-{{- $controllerSa := printf "system:serviceaccount:%s:argocd-application-controller" $projectsArgocdNs }}
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: cv-projects-garage-bounds
-  labels:
-    {{- include "cv.labels" $ | nindent 4 }}
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-      - apiGroups: ["apps"]
-        apiVersions: ["v1"]
-        operations: ["CREATE", "UPDATE"]
-        resources: ["statefulsets"]
-  matchConditions:
-    - name: only-projects-argocd-controller
-      expression: "request.userInfo.username == '{{ $controllerSa }}'"
-    - name: only-managed-garage
-      expression: "has(object.metadata.labels) && 'corpo-valley.com/managed' in object.metadata.labels && object.metadata.labels['corpo-valley.com/managed'] == 'garage'"
-  validations:
-    - expression: "has(object.spec.replicas) && object.spec.replicas == 1"
-      message: "Project-managed Garage must have replicas: 1 (HA not supported on this tier)."
-    - expression: "object.spec.template.spec.containers.size() == 1"
-      message: "Project-managed Garage pod must have exactly one container (no sidecars on this tier)."
-    - expression: "object.spec.template.spec.containers.all(c, c.image == '{{ $.Values.blob.garageImage }}')"
-      message: "Project-managed Garage image must be {{ $.Values.blob.garageImage }} (image pinning gate)."
-    - expression: "object.spec.template.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || c.securityContext.privileged == false)"
-      message: "Project-managed Garage containers must not be privileged."
-    - expression: "object.spec.template.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.allowPrivilegeEscalation) || c.securityContext.allowPrivilegeEscalation == false)"
-      message: "Project-managed Garage containers must not allowPrivilegeEscalation."
-    - expression: "has(object.spec.template.spec.securityContext) && has(object.spec.template.spec.securityContext.runAsNonRoot) && object.spec.template.spec.securityContext.runAsNonRoot == true"
-      message: "Project-managed Garage must set pod securityContext.runAsNonRoot=true."
-    - expression: "object.spec.template.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.capabilities) && has(c.securityContext.capabilities.drop) && c.securityContext.capabilities.drop.exists(d, d == 'ALL'))"
-      message: "Project-managed Garage containers must drop ALL capabilities."
-    - expression: "!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false"
-      message: "Project-managed Garage must not use hostNetwork."
-    - expression: "!has(object.spec.template.spec.hostPID) || object.spec.template.spec.hostPID == false"
-      message: "Project-managed Garage must not use hostPID."
-    - expression: "!has(object.spec.template.spec.hostIPC) || object.spec.template.spec.hostIPC == false"
-      message: "Project-managed Garage must not use hostIPC."
-    - expression: "!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))"
-      message: "Project-managed Garage must not mount hostPath volumes."
-    - expression: "object.spec.volumeClaimTemplates.all(t, !quantity(t.spec.resources.requests.storage).isGreaterThan(quantity('{{ .Values.blob.storageMax | default "10Gi" }}')))"
-      message: "Project-managed Garage storage must be <= {{ .Values.blob.storageMax | default "10Gi" }} (per-tenant quota)."
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: cv-projects-garage-bounds
-  labels:
-    {{- include "cv.labels" $ | nindent 4 }}
-spec:
-  policyName: cv-projects-garage-bounds
-  validationActions: [Deny]
+{{- include "cv.capabilityBounds" (dict
+      "ctx" $
+      "name" "garage"
+      "image" $.Values.tenant.capabilities.garage.image
+      "maxPerVolume" $.Values.tenant.storage.maxPerVolume) }}
 {{- end }}
