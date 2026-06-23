@@ -25,6 +25,8 @@ hosts:
   oauth: ""
   gitea: ""
   mcp: ""
+  # Only used when cooldeps.publicIngress is on; defaults to cooldeps.<domain>.
+  cooldeps: ""
   # The wildcard host used by the projects subdomain. Defaults to
   # "*.projects.<domain>" — change only if your DNS structure differs.
   projectsWildcard: ""
@@ -48,7 +50,7 @@ image:
   registry: ghcr.io/corpo-valley
   prefix: corpo-valley-
   pullPolicy: IfNotPresent
-  defaultTag: v0.8.0
+  defaultTag: v0.9.0
   # Name of the imagePullSecret each workload references. Must exist in the
   # workload's namespace; the chart does NOT create it (use kubectl create
   # secret docker-registry, or a sealed secret).
@@ -56,8 +58,11 @@ image:
   # Keys are the literal image/component names (they complete
   # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
   tags:
-    portal: v0.8.0
-    mcp-gateway: v0.8.0
+    portal: v0.9.0
+    mcp-gateway: v0.9.0
+    # Only consumed when cooldeps.enabled. Built from corpo-valley-main
+    # containers/cooldeps (vendored upstream hashtagcyber/cooldeps).
+    cooldeps: v0.9.0
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
 # Only needed if you GitOps the platform itself: point it at YOUR deployment
@@ -124,6 +129,9 @@ storage:
   oryPostgres: 5Gi
   gitea: 10Gi
   registry: 50Gi
+  # cooldeps bbolt metadata DB + on-disk artifact cache. Only used when
+  # cooldeps.enabled; size with the artifact LRU cap (cooldeps.artifactMaxBytes).
+  cooldeps: 20Gi
 
 # Per-project tenant resource policy.
 # Operator-owned ceilings the portal stamps onto every project namespace as a
@@ -248,6 +256,9 @@ resources:
   cloudflared:
     requests: { cpu: 50m, memory: 64Mi }
     limits:   { cpu: 100m, memory: 128Mi }
+  cooldeps:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
 
 # Replicas per stateless component.
 #
@@ -301,6 +312,53 @@ mcp:
   # the static-client MCP path. Wired to both the portal and the mcp-gateway
   # so the two enforce identically.
   denyClientIds: argocd,gitea
+
+# cooldeps — OPTIONAL package-manager gating proxy (npm / PyPI / Go).
+#
+# When enabled, the chart deploys an in-cluster cooldeps service (cv-cooldeps)
+# and points the Gitea CI runners at it (NPM_CONFIG_REGISTRY / PIP_INDEX_URL /
+# UV_INDEX_URL / GOPROXY), so every dependency CI installs or builds is gated on
+# release-age (the cooldown window), license, and known CVEs before the bytes
+# land — the runners are the highest-value supply-chain target. The portal also
+# surfaces reminders to MCP-connected agents and a /admin/cooldeps page to tune
+# the policy at runtime.
+#
+# `enabled` is the infra on/off (deploy the service + wire CI + show the admin
+# page). The policy below is the INITIAL default; admins override it live from
+# /admin/cooldeps (portal DB is the source of truth and re-applies on restart).
+cooldeps:
+  enabled: false
+  # Expose cooldeps publicly at cooldeps.<domain> so dev laptops can install
+  # through it too (via bootstrap.sh / .npmrc). Adds an Oathkeeper noop/allow
+  # access rule — package managers can't do a Kratos browser login, so the host
+  # is intentionally unauthenticated (cooldeps is a read-only gating proxy).
+  # Leave false for CI-only (in-cluster) use — no public surface, no Kratos rule.
+  publicIngress: false
+  # Server knobs (cooldeps server: section).
+  logLevel: info            # debug | info | warn | error
+  statusEnabled: false      # /status is 404 unless true
+  artifactMaxBytes: 40GiB   # on-disk artifact LRU cap (size storage.cooldeps to suit)
+  # Gating policy. Maps 1:1 onto cooldeps' `policy:` config block; see
+  # corpo-valley-main containers/cooldeps/cooldeps.example.yaml for the full
+  # schema. `overrides` are file-only incident-response pins (allow a fresh
+  # critical fix through the cooldown, or block a known-bad release).
+  policy:
+    license:
+      allow: [MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC]
+      block: [GPL-3.0, AGPL-3.0]
+      warnOnUnknown: true
+    releaseAge:
+      minDays: 14           # the cooldown window; 0 disables it
+      warnOnly: false
+      blockOnUnknown: false
+    cve:
+      maxSeverity: HIGH     # NONE | LOW | MEDIUM | HIGH | CRITICAL; "" disables
+      warnOnly: false
+      fetchSeverity: true
+    failOpen: false         # upstream APIs unreachable => false: BLOCK, true: WARN/allow
+    overrides:
+      allow: []
+      block: []
 
 # Phase-2 placeholders kept so values files stay forward-compatible.
 backups:

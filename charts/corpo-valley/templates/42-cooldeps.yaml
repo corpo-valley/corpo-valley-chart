@@ -1,0 +1,253 @@
+{{/*
+  cooldeps — OPTIONAL package-manager gating proxy (npm / PyPI / Go).
+  https://github.com/hashtagcyber/cooldeps (vendored into corpo-valley-main
+  containers/cooldeps; published as the cooldeps platform image).
+
+  Rendered only when `cooldeps.enabled`. Everything below is self-contained so
+  the service appears/disappears as one unit:
+
+    - Namespace cv-cooldeps (its own tier-platform namespace)
+    - ConfigMap with the rendered cooldeps.yaml (policy from values; this is the
+      INITIAL default — the portal's /admin/cooldeps page overwrites this key and
+      rolls the Deployment at runtime, with the portal DB as source of truth. If
+      you GitOps the platform, add this ConfigMap to ArgoCD ignoreDifferences so
+      admin edits aren't reverted.)
+    - PVC for the bbolt metadata DB + artifact cache (/data)
+    - Deployment (1 replica, Recreate — RWO volume, no built-in HA)
+    - ClusterIP Service on :8080
+    - Ingress NetworkPolicy: default-deny, allow node probes + gitea-runners
+      (CI is the primary consumer) + ory (oathkeeper) when publicIngress
+    - Egress NetworkPolicy: DNS + outbound 443/80 so cooldeps can reach the
+      upstream registries and OSV/deps.dev
+
+  Public exposure (cooldeps.<domain>) is gated on `cooldeps.publicIngress`. The
+  Oathkeeper wildcard Ingress already routes the host to the proxy; with no rule
+  Oathkeeper denies it, so the host is unreachable until publicIngress adds the
+  noop/allow access rule (see 14-ory-oathkeeper.yaml). Package managers and CI
+  can't complete a Kratos browser login, hence the deliberate noop authenticator.
+*/}}
+{{- if and (include "cv.role.platform" .) $.Values.cooldeps.enabled }}
+{{- $ns := include "cv.ns" (list $ "cooldeps") }}
+{{- $giteaRunnersNs := include "cv.ns" (list $ "gitea-runners") }}
+{{- $oryNs := include "cv.ns" (list $ "ory") }}
+{{- $portalNs := include "cv.ns" (list $ "portal") }}
+{{- $nodeCIDR := $.Values.cluster.nodeCIDR }}
+{{- $cd := $.Values.cooldeps }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    corpo-valley.com/tier: platform
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cooldeps-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+data:
+  cooldeps.yaml: |
+    server:
+      addr: ":8080"
+      statusEnabled: {{ $cd.statusEnabled | default false }}
+      logLevel: {{ $cd.logLevel | default "info" | quote }}
+    cache:
+      dataDir: /data
+      artifacts: true
+      artifactMaxBytes: {{ $cd.artifactMaxBytes | default "40GiB" | quote }}
+    policy:
+      {{- toYaml $cd.policy | nindent 6 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cooldeps-data
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if $.Values.storage.className }}
+  storageClassName: {{ $.Values.storage.className }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $.Values.storage.cooldeps }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cooldeps
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cooldeps
+  template:
+    metadata:
+      labels:
+        app: cooldeps
+      annotations:
+        # Roll the pod when the rendered config changes (cooldeps reads its
+        # config file once at startup). The portal's admin restart does the same
+        # at runtime.
+        checksum/config: {{ $cd.policy | toYaml | sha256sum }}
+    spec:
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cooldeps
+          image: {{ include "cv.image" (list $ "cooldeps") }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: []
+          env:
+            - { name: COOLDEPS_CONFIG, value: /etc/cooldeps/cooldeps.yaml }
+          ports:
+            - { name: http, containerPort: 8080 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/cooldeps, readOnly: true }
+            - { name: data, mountPath: /data }
+          resources:
+            {{- toYaml $.Values.resources.cooldeps | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: cooldeps-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: cooldeps-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cooldeps
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+spec:
+  selector:
+    app: cooldeps
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+---
+# Lets the portal SA apply admin policy edits at runtime: rewrite the
+# cooldeps.yaml ConfigMap key and roll the Deployment (cooldeps reads its config
+# once at startup). Scoped to this namespace and these two objects.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: portal-cooldeps-manager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["cooldeps-config"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["cooldeps"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: portal-cooldeps-manager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: portal
+    namespace: {{ $portalNs }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portal-cooldeps-manager
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-cooldeps-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+spec:
+  podSelector: { matchLabels: { app: cooldeps } }
+  policyTypes: [Ingress]
+  ingress:
+    # kubelet probes
+    - from: [{ ipBlock: { cidr: {{ $nodeCIDR }} } }]
+    # CI runners — the primary consumer (installs/builds flow through here)
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $giteaRunnersNs }} } }
+      ports: [{ protocol: TCP, port: 8080 }]
+    {{- if $cd.publicIngress }}
+    # Public path: Oathkeeper (cv-ory) proxies cooldeps.<domain> to us.
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $oryNs }} } }
+      ports: [{ protocol: TCP, port: 8080 }]
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cv-cooldeps-egress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+    app: cooldeps
+spec:
+  podSelector: { matchLabels: { app: cooldeps } }
+  policyTypes: [Egress]
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # Upstream registries (npmjs/pypi/proxy.golang.org) + OSV/deps.dev, public
+    # internet only (RFC1918 excluded so cooldeps can't pivot inside the cluster).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 80 }
+{{- end }}
