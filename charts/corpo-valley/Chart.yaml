@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.8.0
-appVersion: "v0.8.0"
+version: 0.9.0
+appVersion: "v0.9.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,6 +39,8 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: added
+      description: "optional cooldeps package-manager gating proxy (npm/PyPI/Go) — enable with cooldeps.enabled to deploy an in-cluster cooldeps service, route the Gitea CI runners through it (release-age + license + CVE gating), and surface an /admin/cooldeps policy page plus reminders to MCP agents; cooldeps.publicIngress optionally exposes it at cooldeps.<domain> with an Oathkeeper noop rule"
     - kind: added
       description: per-project CPU / storage / pod / PVC budgets — operator-tunable via tenant.{cpu,storage,pods,pvcs}.* (injected as CV_* env) and per-project raisable by an admin from the portal's Project Resources page; complements the existing tenant.memory.* knobs
     - kind: changed

@@ -113,3 +113,16 @@ scale:
   oathkeeper: 2    # eliminates the gitea wildcard 502-gap during rollouts
   portal: 2        # HA for the dashboard
   mcpGateway: 2
+
+# cooldeps — OPTIONAL package-manager gating proxy (npm / PyPI / Go).
+# Off by default. Enable to deploy an in-cluster cooldeps service and route the
+# Gitea CI runners through it, so every dependency CI installs/builds is gated on
+# release-age (cooldown), license, and known CVEs. The portal then shows an
+# /admin/cooldeps page and nudges MCP agents to expect the gate. Tune the policy
+# live from the admin page (the values below are just the initial defaults).
+# cooldeps:
+#   enabled: true
+#   publicIngress: false        # also expose cooldeps.<domain> for dev laptops (adds an Oathkeeper noop rule)
+#   policy:
+#     releaseAge: { minDays: 14 }   # the cooldown window
+#     cve: { maxSeverity: HIGH }
