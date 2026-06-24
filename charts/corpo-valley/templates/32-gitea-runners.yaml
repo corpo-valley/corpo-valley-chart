@@ -99,6 +99,13 @@ spec:
     metadata:
       labels:
         app: gitea-runner
+      {{- if $cooldepsEnabled }}
+      annotations:
+        # act_runner reads its config (a mounted ConfigMap) once at startup, so
+        # a ConfigMap change alone won't repoint a long-lived runner. Roll the
+        # StatefulSet whenever the cooldeps registry wiring changes.
+        checksum/cooldeps: {{ printf "%s|%v" $cooldepsUrl $cooldepsEnabled | sha256sum }}
+      {{- end }}
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
