@@ -6,6 +6,11 @@
 {{- $giteaNs := include "cv.ns" (list $ "gitea") }}
 {{- $registryNs := include "cv.ns" (list $ "registry") }}
 {{- $registrySvc := include "cv.svc" (list $ "registry" "registry") }}
+{{- $cooldepsEnabled := $.Values.cooldeps.enabled }}
+{{- $cooldepsNs := include "cv.ns" (list $ "cooldeps") }}
+{{- $cooldepsSvc := include "cv.svc" (list $ "cooldeps" "cooldeps") }}
+{{- $cooldepsHost := printf "%s:8080" $cooldepsSvc }}
+{{- $cooldepsUrl := printf "http://%s" $cooldepsHost }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -27,6 +32,22 @@ data:
       fetch_timeout: 5s
       fetch_interval: 2s
       labels: []
+      {{- if $cooldepsEnabled }}
+      # cooldeps gating: every CI job container inherits these so npm/pip/uv/go
+      # installs route through the in-cluster cooldeps proxy (release-age +
+      # license + CVE gating) instead of hitting the public registries direct.
+      # PIP_TRUSTED_HOST is required because the in-cluster endpoint is plain
+      # HTTP. NOTE: this covers native runner steps; packages installed *inside*
+      # a `docker build` run by the dind sidecar are gated by the project
+      # template's build-time config (community-center .npmrc / Dockerfile), not
+      # by these envs.
+      envs:
+        NPM_CONFIG_REGISTRY: "{{ $cooldepsUrl }}/npm/"
+        PIP_INDEX_URL: "{{ $cooldepsUrl }}/pypi/simple"
+        PIP_TRUSTED_HOST: "{{ $cooldepsHost }}"
+        UV_INDEX_URL: "{{ $cooldepsUrl }}/pypi/simple"
+        GOPROXY: "{{ $cooldepsUrl }}/go,direct"
+      {{- end }}
     cache:
       enabled: true
       dir: /data/cache
@@ -78,6 +99,13 @@ spec:
     metadata:
       labels:
         app: gitea-runner
+      {{- if $cooldepsEnabled }}
+      annotations:
+        # act_runner reads its config (a mounted ConfigMap) once at startup, so
+        # a ConfigMap change alone won't repoint a long-lived runner. Roll the
+        # StatefulSet whenever the cooldeps registry wiring changes.
+        checksum/cooldeps: {{ printf "%s|%v" $cooldepsUrl $cooldepsEnabled | sha256sum }}
+      {{- end }}
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}
@@ -185,6 +213,13 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $portalNs }} } }
       ports:
         - { protocol: TCP, port: 3000 }
+    {{- if $cooldepsEnabled }}
+    # cooldeps proxy — CI dependency installs/builds route through it.
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $cooldepsNs }} } }
+      ports:
+        - { protocol: TCP, port: 8080 }
+    {{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

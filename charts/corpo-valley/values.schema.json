@@ -24,6 +24,7 @@
         "oauth":            { "type": "string" },
         "gitea":            { "type": "string" },
         "mcp":              { "type": "string" },
+        "cooldeps":         { "type": "string" },
         "projectsWildcard": { "type": "string" },
         "oathkeeperWildcard": { "type": "boolean" }
       }
@@ -102,7 +103,8 @@
         "oryPostgresClassName": { "type": "string", "description": "StorageClass for the ory-postgres volumeClaimTemplate. Unset inherits storage.className; set-but-empty omits the field (cluster default binds). Use when adopting a pre-chart ory-postgres whose live volumes have an empty/different (immutable) storageClassName." },
         "oryPostgres": { "type": "string" },
         "gitea":       { "type": "string" },
-        "registry":    { "type": "string" }
+        "registry":    { "type": "string" },
+        "cooldeps":    { "type": "string" }
       }
     },
     "tenant": {
@@ -258,6 +260,18 @@
         "publicUrl":       { "type": "string" },
         "enforceAudience": { "type": "boolean" },
         "denyClientIds":   { "type": "string" }
+      }
+    },
+    "cooldeps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled":          { "type": "boolean" },
+        "publicIngress":    { "type": "boolean" },
+        "logLevel":         { "type": "string", "enum": ["debug", "info", "warn", "error"] },
+        "statusEnabled":    { "type": "boolean" },
+        "artifactMaxBytes": { "type": "string" },
+        "policy":           { "type": "object", "description": "Passed through verbatim to cooldeps' policy: config block." }
       }
     },
     "backups": {

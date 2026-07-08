@@ -8,6 +8,9 @@
 {{- $hydraAdmin := include "cv.svc" (list $ "ory-hydra-admin" "ory") }}
 {{- $projectsWildcard := include "cv.projectsWildcard" $ }}
 {{- $projectsHostSuffix := include "cv.projectsHostSuffix" $ }}
+{{- $cooldepsPublic := and $.Values.cooldeps.enabled $.Values.cooldeps.publicIngress }}
+{{- $cooldepsHost := include "cv.host" (list $ "cooldeps") }}
+{{- $cooldepsSvc := include "cv.svc" (list $ "cooldeps" "cooldeps") }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -49,6 +52,9 @@ data:
       repositories:
         - file:///etc/oathkeeper/config/rules-gitea.json
         - file:///etc/oathkeeper/config/rules-projects.json
+        {{- if $cooldepsPublic }}
+        - file:///etc/oathkeeper/config/rules-cooldeps.json
+        {{- end }}
 
     authenticators:
       noop:
@@ -138,6 +144,22 @@ data:
         "upstream": { "url": "http://127.0.0.1" }
       }
     ]
+{{- if $cooldepsPublic }}
+
+  rules-cooldeps.json: |
+    [
+      {
+        "id": "cooldeps-public-rule",
+        "_comment": "Public cooldeps proxy (cooldeps.<domain>). Unauthenticated by design: the callers are package managers (npm/pip/go) and CI, which cannot complete a Kratos browser login, so the authenticator is noop and the authorizer allow. cooldeps is a read-only gating proxy in front of public registries — there is no tenant data behind it. Only rendered when cooldeps.publicIngress is on.",
+        "version": "v0.40.0",
+        "match": { "url": "<https?://>{{ $cooldepsHost }}/<.*>", "methods": ["GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS"] },
+        "authenticators": [{ "handler": "noop" }],
+        "authorizer": { "handler": "allow" },
+        "mutators": [{ "handler": "noop" }],
+        "upstream": { "url": "http://{{ $cooldepsSvc }}:8080", "preserve_host": true }
+      }
+    ]
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -159,7 +181,7 @@ spec:
       annotations:
         # Bump on any rules/config change — the rules are a mounted ConfigMap and
         # oathkeeper doesn't hot-reload, so the pod must roll to pick them up.
-        config-revision: "2026-06-12-gitea-ui-allow"
+        config-revision: "2026-06-12-gitea-ui-allow{{ if $cooldepsPublic }}-cooldeps{{ end }}"
     spec:
       imagePullSecrets:
         - name: {{ $.Values.image.pullSecret }}

@@ -289,6 +289,22 @@ spec:
             # has the Kratos google provider enabled (auth.google).
             - name: GOOGLE_LOGIN_ENABLED
               value: {{ $.Values.auth.google.enabled | quote }}
+            # cooldeps gating proxy. When enabled the portal shows the
+            # /admin/cooldeps page, injects cooldeps reminders into MCP
+            # surfaces + the seeded project template, and manages the
+            # cv-cooldeps ConfigMap (admin policy edits) + rolling restart.
+            - name: COOLDEPS_ENABLED
+              value: {{ $.Values.cooldeps.enabled | quote }}
+            {{- if $.Values.cooldeps.enabled }}
+            - name: COOLDEPS_INTERNAL_URL
+              value: http://{{ include "cv.svc" (list $ "cooldeps" "cooldeps") }}:8080
+            - name: COOLDEPS_NAMESPACE
+              value: {{ include "cv.ns" (list $ "cooldeps") }}
+            {{- if $.Values.cooldeps.publicIngress }}
+            - name: COOLDEPS_PUBLIC_URL
+              value: https://{{ include "cv.host" (list $ "cooldeps") }}
+            {{- end }}
+            {{- end }}
             - name: PROJECTS_DOMAIN
               value: {{ include "cv.projectsHostSuffix" $ }}
             # In-cluster endpoints the portal writes into tenant artifacts
