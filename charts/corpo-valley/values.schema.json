@@ -194,6 +194,7 @@
         "podCIDR":     { "type": "string" },
         "serviceCIDR": { "type": "string" },
         "nodeCIDR":    { "type": "string" },
+        "ingressNamespace": { "type": "string", "description": "Namespace of the ingress controller, admitted by the per-project ingress NetworkPolicy. Default 'ingress' (microk8s addon); e.g. 'ingress-nginx' on EKS." },
         "sealedSecretsControllerUrl": { "type": "string" },
         "sealedSecretsCertSha256": {
           "type": "string",
