@@ -26,6 +26,64 @@ entries:
         - kind: added
           description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
     apiVersion: v2
+    appVersion: v0.10.0
+    created: "2026-07-09T21:40:37.870558022Z"
+    description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
+      platform that abstracts code + infra so non-technical users can drive Claude
+      Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
+      registry, MCP gateway, and the per-project bounds (VAPs / AppProjects / NetworkPolicies).  Platform
+      images are built from github.com/corpo-valley/corpo-valley-main and published
+      to ghcr.io/corpo-valley/corpo-valley-*. This chart references them via values
+      but does not require any source from the build repo.  Phase 1 ships `role: all-in-one`
+      — one cluster, single platform instance. The `role: platform` / `role: tenants`
+      modes are scaffolded for a future platform/tenants cluster split but are not
+      yet rendered by this version. '
+    digest: 3fc7823dcd9b42bcd5de111d1fabc6e5726c433b2d7370a781394237b1633a47
+    home: https://github.com/corpo-valley/corpo-valley-main
+    keywords:
+    - ory
+    - kratos
+    - hydra
+    - argocd
+    - gitops
+    - mcp
+    - claude-code
+    maintainers:
+    - name: corpo-valley
+      url: https://github.com/corpo-valley
+    name: corpo-valley
+    sources:
+    - https://github.com/corpo-valley/corpo-valley-main
+    - https://github.com/corpo-valley/corpo-valley-chart
+    type: application
+    urls:
+    - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.10.0.tgz
+    version: 0.10.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: "optional cooldeps package-manager gating proxy (npm/PyPI/Go) — enable with cooldeps.enabled to deploy an in-cluster cooldeps service, route the Gitea CI runners through it (release-age + license + CVE gating), and surface an /admin/cooldeps policy page plus reminders to MCP agents; cooldeps.publicIngress optionally exposes it at cooldeps.<domain> with an Oathkeeper noop rule"
+        - kind: added
+          description: per-project CPU / storage / pod / PVC budgets — operator-tunable via tenant.{cpu,storage,pods,pvcs}.* (injected as CV_* env) and per-project raisable by an admin from the portal's Project Resources page; complements the existing tenant.memory.* knobs
+        - kind: changed
+          description: "BREAKING: retired the top-level `blob:` section — per-project Garage config moved to tenant.capabilities.garage.image and the per-volume storage cap to tenant.storage.maxPerVolume. Update any values files that set blob.garageImage / blob.storageMax."
+        - kind: added
+          description: tenant.capabilities.{postgres,garage}.image pin each per-project StatefulSet AND its cv-projects-<name>-bounds admission policy from a single value (the Postgres image is now chart-configurable, pinned to one image)
+        - kind: changed
+          description: the two near-identical per-capability ValidatingAdmissionPolicies collapsed into a shared cv.capabilityBounds helper; the per-volume storage cap (tenant.storage.maxPerVolume) now drives both
+        - kind: added
+          description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
+        - kind: changed
+          description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.8.0
+        - kind: fixed
+          description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
+        - kind: fixed
+          description: ory-postgres StatefulSet now sets podManagementPolicy explicitly to OrderedReady (the Kubernetes-persisted default) so it never differs literally from a pre-chart object — removing one of the two immutable-field mismatches that blocked adopting an existing deployment under GitOps
+        - kind: added
+          description: storage.oryPostgresClassName overrides the StorageClass on the ory-postgres volume (unset inherits storage.className, set-but-empty omits the field so the cluster default binds) — lets an adopted, pre-chart ory-postgres render a volumeClaimTemplate matching its existing (immutable) volumes
+        - kind: added
+          description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
+    apiVersion: v2
     appVersion: v0.9.0
     created: "2026-07-08T23:24:44.328188027Z"
     description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
@@ -163,4 +221,4 @@ entries:
     urls:
     - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.7.0.tgz
     version: 0.7.0
-generated: "2026-07-08T23:24:44.325952275Z"
+generated: "2026-07-09T21:40:37.868676562Z"
