@@ -377,6 +377,14 @@ spec:
               value: {{ $.Values.cluster.serviceCIDR | quote }}
             - name: CV_NODE_CIDR
               value: {{ $.Values.cluster.nodeCIDR | quote }}
+            # Namespaces the per-project ingress NetworkPolicy admits, matched by
+            # kubernetes.io/metadata.name. The ingress controller often lives in
+            # an addon namespace this chart doesn't own, so it's named, not
+            # labelled. The mcp-gateway ns is computed from the platform prefix.
+            - name: CV_INGRESS_NAMESPACE
+              value: {{ $.Values.cluster.ingressNamespace | default "ingress" | quote }}
+            - name: CV_MCP_GATEWAY_NAMESPACE
+              value: {{ include "cv.ns" (list $ "portal") | quote }}
             - name: SEALED_SECRETS_CONTROLLER_URL
               value: {{ $.Values.cluster.sealedSecretsControllerUrl | quote }}
             # Security hardening (NODE_ENV=production images fail closed without these):
