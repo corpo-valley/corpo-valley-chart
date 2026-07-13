@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.10.0
-appVersion: "v0.10.0"
+version: 0.10.1
+appVersion: "v0.10.1"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,6 +39,8 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "sealed-secrets cert is now fetched through the Kubernetes API server's service-proxy (authenticated + TLS-verified) instead of a plaintext HTTP fetch guarded by a manually-pinned SPKI hash. Removes the every-30-days breakage when the controller rotated its key: rotation now propagates automatically. Retired cluster.sealedSecretsCertSha256 and scripts/print-cert-pin.sh; added a GET-only kube-system Role (services/proxy) for the portal SA. Platform images bumped to v0.10.1."
     - kind: added
       description: "optional cooldeps package-manager gating proxy (npm/PyPI/Go) — enable with cooldeps.enabled to deploy an in-cluster cooldeps service, route the Gitea CI runners through it (release-age + license + CVE gating), and surface an /admin/cooldeps policy page plus reminders to MCP agents; cooldeps.publicIngress optionally exposes it at cooldeps.<domain> with an Oathkeeper noop rule"
     - kind: added

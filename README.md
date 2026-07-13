@@ -95,8 +95,8 @@ another way. Keep `out/secrets/secrets.local.env` somewhere safe.
 ```bash
 cp values.example.yaml my-values.yaml
 # Edit: domain, cluster CIDRs (must match your CNI!), storage.className,
-# email.fromAddress — and the sealed-secrets cert pin:
-./scripts/print-cert-pin.sh   # -> cluster.sealedSecretsCertSha256
+# email.fromAddress. (No sealed-secrets cert pin needed — the portal fetches the
+# controller's public cert through the authenticated Kubernetes API server.)
 
 helm install corpo-valley charts/corpo-valley \
   --set cloudflare.tunnelId=<TUNNEL_UUID> \
@@ -180,8 +180,7 @@ current `corpo-valley.com` deployment.
 | `storage.className` | `""` (cluster default) | Set to `hcloud-volumes` on Hetzner, `microk8s-hostpath` for microk8s. |
 | `storage.oryPostgres` / `gitea` / `registry` | `5Gi` / `10Gi` / `50Gi` | Per-PVC sizes. |
 | `cluster.podCIDR` / `serviceCIDR` / `nodeCIDR` | matches the live deploy | Used by the per-project egress NetworkPolicies emitted by the portal. |
-| `cluster.sealedSecretsControllerUrl` | in-cluster default | The portal fetches the public cert from here to seal project secrets. |
-| `cluster.sealedSecretsCertSha256` | `""` | SPKI sha256 pin of the controller cert (`scripts/print-cert-pin.sh`). **Required** for project-secret sealing — production portal images refuse trust-on-first-use. |
+| `cluster.sealedSecretsControllerUrl` | in-cluster default | Controller Service the portal fetches the public cert from (through the authenticated API-server service-proxy) to seal project secrets. No SPKI pin required. |
 | `resources.<component>.requests` / `limits` | matches the live deploy | Per-component resources. |
 | `scale.giteaRunner` | `1` | Bump for build concurrency. |
 | `argocd.projectsArgocd.enabled` / `nsLogical` / `appProject` | `true` / `projects-argocd` / `projects` | The projects-ArgoCD wiring the chart expects. |
@@ -332,7 +331,6 @@ charts/corpo-valley/      # THE CHART (packaged + published to the gh-pages repo
   lint-chart.yaml         # helm lint + render on PRs touching charts/**
 scripts/                  # operational tooling (run from the repo, not in the chart package)
   generate-secrets.sh     # mints + optionally seals every Secret the chart needs
-  print-cert-pin.sh       # SPKI sha256 pin for cluster.sealedSecretsCertSha256
   post-install.sh         # Gitea admin/token, OIDC source, runner token, ArgoCD repo cred
   setup-node-registry.sh  # per-node kubelet -> cv-registry pull routing
   bootstrap-admin.sh      # creates the first platform admin (registration is disabled)

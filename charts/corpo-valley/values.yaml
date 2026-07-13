@@ -58,8 +58,8 @@ image:
   # Keys are the literal image/component names (they complete
   # <registry>/<prefix><name>:<tag>): portal, mcp-gateway.
   tags:
-    portal: v0.10.0
-    mcp-gateway: v0.10.0
+    portal: v0.10.1
+    mcp-gateway: v0.10.1
     # Only consumed when cooldeps.enabled. Built from corpo-valley-main
     # containers/cooldeps (vendored upstream hashtagcyber/cooldeps). Versions
     # independently of the platform trio — left at its own release.
@@ -218,12 +218,13 @@ cluster:
   # `kube-system` for a default k3s Traefik, etc. Getting this wrong blocks all
   # inbound traffic to tenant sites.
   ingressNamespace: ingress
+  # The portal fetches the controller's public cert through the API server's
+  # service-proxy (authenticated + TLS-verified), so no SPKI pin is needed — key
+  # rotation propagates automatically. The chart grants the portal SA GET on the
+  # controller's services/proxy in kube-system for this (20-portal.yaml); the
+  # resourceNames there assume the stock name/port below, so keep them in sync if
+  # you change this URL.
   sealedSecretsControllerUrl: http://sealed-secrets-controller.kube-system.svc.cluster.local:8080
-  # SPKI sha256 pin of the sealed-secrets controller cert. REQUIRED for
-  # project-secret sealing: the portal runs NODE_ENV=production and refuses
-  # trust-on-first-use without an explicit pin. Get it after the controller
-  # is up:   ./scripts/print-cert-pin.sh
-  sealedSecretsCertSha256: ""
 
 # Resources for each platform component (mirror the current deploy).
 resources:

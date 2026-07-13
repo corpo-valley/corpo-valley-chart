@@ -77,7 +77,6 @@ cluster:
   podCIDR: 10.1.0.0/16
   serviceCIDR: 10.152.183.0/24
   nodeCIDR: 192.168.87.0/24
-  sealedSecretsCertSha256: a9d59cf74dba2c8a816c2e8def601018ba6f2c4c1dd6146c74857c286f21aebc
 
 argocd:
   projectsArgocd:

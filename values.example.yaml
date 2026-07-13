@@ -95,11 +95,9 @@ cluster:
   podCIDR: 10.42.0.0/16        # k3s default
   serviceCIDR: 10.43.0.0/16    # k3s default
   nodeCIDR: 10.0.0.0/24        # Hetzner private network range, adjust
-  # SPKI sha256 pin of your sealed-secrets controller cert. Required for the
-  # portal to seal per-project secrets (production images refuse
-  # trust-on-first-use). Once the controller is up, fill in the output of:
-  #   ./scripts/print-cert-pin.sh
-  sealedSecretsCertSha256: ""
+  # No sealed-secrets cert pin needed: the portal fetches the controller's public
+  # cert through the API server's service-proxy (authenticated), and key rotation
+  # propagates automatically.
 
 # Override per-component resources here. Defaults mirror corpo-valley.com.
 # resources:

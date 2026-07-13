@@ -206,6 +206,45 @@ roleRef:
   kind: ClusterRole
   name: cv-projects-namespace-provisioner
 ---
+# Lets the portal fetch the sealed-secrets controller's public cert through the
+# API server's service-proxy (authenticated + TLS-verified) instead of pinning
+# a static SPKI hash against a plaintext HTTP fetch. GET-only on that one
+# Service's proxy subresource — no Secret access, no mutating verbs. Namespaced
+# to kube-system where the controller lives; the portal SA lives in {{ $ns }},
+# so this RoleBinding reaches across namespaces into kube-system.
+# NOTE: resourceNames track the stock cluster.sealedSecretsControllerUrl
+# (sealed-secrets-controller:8080); adjust if you override that value.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cv-portal-sealed-secrets-cert-reader
+  namespace: kube-system
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames:
+      - "sealed-secrets-controller"
+      - "http:sealed-secrets-controller:8080"
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cv-portal-sealed-secrets-cert-reader
+  namespace: kube-system
+  labels:
+    {{- include "cv.labels" $ | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: portal
+    namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cv-portal-sealed-secrets-cert-reader
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -399,13 +438,6 @@ spec:
             - name: INTERNAL_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef: { name: portal-platform-secrets, key: INTERNAL_WEBHOOK_SECRET }
-            {{- if $.Values.cluster.sealedSecretsCertSha256 }}
-            # Pins the sealed-secrets controller key (SPKI sha256). In production the
-            # portal refuses trust-on-first-use, so project-secret sealing is dead
-            # until this is set. See README "Pinning the sealed-secrets cert".
-            - name: SEALED_SECRETS_CERT_SHA256
-              value: {{ $.Values.cluster.sealedSecretsCertSha256 | quote }}
-            {{- end }}
             # MCP audience enforcement (RFC 8707 resource indicators). Off until MCP
             # clients are confirmed sending resource indicators; foreign-resource
             # tokens are rejected even when off.
