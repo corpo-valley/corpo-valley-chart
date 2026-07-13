@@ -195,12 +195,7 @@
         "serviceCIDR": { "type": "string" },
         "nodeCIDR":    { "type": "string" },
         "ingressNamespace": { "type": "string", "description": "Namespace of the ingress controller, admitted by the per-project ingress NetworkPolicy. Default 'ingress' (microk8s addon); e.g. 'ingress-nginx' on EKS." },
-        "sealedSecretsControllerUrl": { "type": "string" },
-        "sealedSecretsCertSha256": {
-          "type": "string",
-          "pattern": "^([0-9a-f]{64})?$",
-          "description": "SPKI sha256 pin of the sealed-secrets controller cert (lowercase hex, from scripts/print-cert-pin.sh). Empty omits the pin env, which disables project-secret sealing in production images."
-        }
+        "sealedSecretsControllerUrl": { "type": "string", "description": "In-cluster URL of the sealed-secrets controller. The portal fetches its public cert through the API server's service-proxy (authenticated), so no SPKI pin is required." }
       }
     },
     "resources": {
