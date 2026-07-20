@@ -52,6 +52,13 @@ data:
 
     oauth2:
       expose_internal_errors: false
+      pkce:
+        # OAuth 2.1 / MCP spec require PKCE for public clients. All MCP clients
+        # register as public (token_endpoint_auth_method=none) via DCR, so
+        # enforce PKCE for them — closes authorization-code interception /
+        # downgrade. Not enforced globally: confidential first-party SSO clients
+        # (argocd/gitea) are unaffected.
+        enforced_for_public_clients: true
       grant:
         refresh_token:
           # Rotation grace period: Hydra rotates the refresh token on every use
