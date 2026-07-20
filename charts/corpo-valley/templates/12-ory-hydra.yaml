@@ -36,6 +36,14 @@ data:
       logout: https://{{ $portalHost }}/logout
       error: https://{{ $portalHost }}/error
       post_logout_redirect: https://{{ $portalHost }}/
+      # OAuth 2.0 Device Authorization Grant (RFC 8628). Hydra's own
+      # /oauth2/device/verify redirects the browser to these portal pages
+      # (routes/device.ts): `verification` collects the user code, `success` is
+      # the post-consent landing page. Both MUST be set — Hydra's fallbacks just
+      # render an error.
+      device:
+        verification: https://{{ $portalHost }}/device
+        success: https://{{ $portalHost }}/device/success
 
     oidc:
       subject_identifiers:
@@ -49,9 +57,28 @@ data:
       id_token: 1h
       auth_code: 10m
       login_consent_request: 30m
+      # Human-interaction window for the device/user code (RFC 8628). Matches the
+      # code's expires_in advertised to the polling client.
+      device_user_code: 10m
 
     oauth2:
       expose_internal_errors: false
+      grant:
+        refresh_token:
+          # Rotation grace period: Hydra rotates the refresh token on every use
+          # and revokes the whole grant if a rotated token is replayed. Headless
+          # MCP clients (e.g. Claude Code) frequently run concurrent processes
+          # that share one refresh token from a common on-disk store; without a
+          # grace window, two near-simultaneous refreshes race — the loser
+          # replays an already-rotated token, Hydra nukes the family, and every
+          # session is bounced to interactive re-login. A short window lets the
+          # straggler succeed. Keep it short: it widens the replay window of the
+          # PREVIOUS refresh token only; access-token TTLs are unchanged.
+          rotation_grace_period: 60s
+      device_authorization:
+        # Advisory polling interval surfaced to the device as `interval`
+        # (RFC 8628 §3.2). Hydra does not enforce it.
+        token_polling_interval: 5s
 ---
 apiVersion: apps/v1
 kind: Deployment
