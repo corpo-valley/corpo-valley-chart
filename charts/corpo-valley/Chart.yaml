@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.10.1
-appVersion: "v0.10.1"
+version: 0.11.0
+appVersion: "v0.11.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
