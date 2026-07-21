@@ -549,4 +549,10 @@ spec:
           - path: /oauth2/register
             pathType: Prefix
             backend: { service: { name: portal, port: { number: 80 } } }
+          # MCP audience-binding facade authorization endpoint. Advertised in the
+          # AS metadata as the authorization_endpoint (same origin as the issuer),
+          # it injects the MCP `audience` and 302s to Hydra's real /oauth2/auth.
+          - path: /oauth2/mcp-authorize
+            pathType: Exact
+            backend: { service: { name: portal, port: { number: 80 } } }
 {{- end }}
