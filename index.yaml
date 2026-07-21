@@ -29,7 +29,7 @@ entries:
           description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
     apiVersion: v2
     appVersion: v0.10.1
-    created: "2026-07-13T17:12:54.906362824Z"
+    created: "2026-07-21T19:34:49.430706128Z"
     description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
       platform that abstracts code + infra so non-technical users can drive Claude
       Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
@@ -40,7 +40,7 @@ entries:
       — one cluster, single platform instance. The `role: platform` / `role: tenants`
       modes are scaffolded for a future platform/tenants cluster split but are not
       yet rendered by this version. '
-    digest: e43fc2c20725fb5b2abf8cd43e5dc1908c55e2c9288e55562289ae29ff2d26d7
+    digest: 68b27d4807bbddca5e22defced55931ff303017cb7c49c880e0c65f8b3fb6b73
     home: https://github.com/corpo-valley/corpo-valley-main
     keywords:
     - ory
@@ -281,4 +281,4 @@ entries:
     urls:
     - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.7.0.tgz
     version: 0.7.0
-generated: "2026-07-13T17:12:54.903491527Z"
+generated: "2026-07-21T19:34:49.428642346Z"
