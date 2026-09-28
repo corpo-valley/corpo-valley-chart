@@ -1,6 +1,8 @@
 {{- if include "cv.role.platform" . }}
 {{- $ns := include "cv.ns" (list $ "portal") }}
 {{- $oauthHost := include "cv.host" (list $ "oauth") }}
+{{- $mcpHost := include "cv.host" (list $ "mcp") }}
+{{- $mcpPublicUrl := $.Values.mcp.publicUrl | default (printf "https://%s" $mcpHost) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -52,6 +54,15 @@ spec:
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
             - name: MCP_ENFORCE_AUDIENCE
               value: {{ $.Values.mcp.enforceAudience | quote }}
+            # The platform MCP resource. The portal's authorization facade
+            # stamps every MCP token with THIS audience (it can't mint
+            # per-project ones yet); the gateway accepts it as equivalent to the
+            # project's own resource while mcp.acceptPlatformAudience is true,
+            # otherwise every project MCP endpoint 403s with invalid_audience.
+            - name: PUBLIC_MCP_URL
+              value: {{ $mcpPublicUrl | quote }}
+            - name: MCP_ACCEPT_PLATFORM_AUDIENCE
+              value: {{ $.Values.mcp.acceptPlatformAudience | quote }}
             # Same deny-list as the portal's MCP endpoint, set EXPLICITLY so
             # the two can't drift (the in-code fallback chain differs: without
             # this env the gateway denied only its hardcoded default while the

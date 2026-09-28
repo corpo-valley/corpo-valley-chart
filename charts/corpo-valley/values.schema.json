@@ -255,6 +255,7 @@
       "properties": {
         "publicUrl":       { "type": "string" },
         "enforceAudience": { "type": "boolean" },
+        "acceptPlatformAudience": { "type": "boolean" },
         "denyClientIds":   { "type": "string" }
       }
     },

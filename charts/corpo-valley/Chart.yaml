@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.12.0
-appVersion: "v0.12.0"
+version: 0.12.1
+appVersion: "v0.12.1"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,6 +39,8 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "per-project MCP endpoints were unreachable since 0.11.0 (403 invalid_audience): the portal's authorization facade stamps every MCP token with the platform MCP audience, which the project gateway rejected as a foreign resource. The gateway now receives PUBLIC_MCP_URL and accepts the platform audience while mcp.acceptPlatformAudience (new, default true) is set; the per-request project-access check remains authoritative. Portal + mcp-gateway images bumped to v0.12.1 (also restores the MCP deny list to the same fallback chain as the gateway — the 0.11.0 union wrongly denied claude-code-mcp at the platform MCP)."
     - kind: fixed
       description: "sealed-secrets cert is now fetched through the Kubernetes API server's service-proxy (authenticated + TLS-verified) instead of a plaintext HTTP fetch guarded by a manually-pinned SPKI hash. Removes the every-30-days breakage when the controller rotated its key: rotation now propagates automatically. Retired cluster.sealedSecretsCertSha256 and scripts/print-cert-pin.sh; added a GET-only kube-system Role (services/proxy) for the portal SA. Platform images bumped to v0.10.1."
     - kind: added
