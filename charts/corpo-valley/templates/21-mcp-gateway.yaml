@@ -57,7 +57,8 @@ spec:
             # since 0.11.0, project audiences only since 0.13.0. Defaults to the
             # platform flag when unset.
             - name: MCP_ENFORCE_AUDIENCE
-              value: {{ (ternary $.Values.mcp.enforceAudience $.Values.mcp.gateway.enforceAudience (kindIs "invalid" $.Values.mcp.gateway.enforceAudience)) | quote }}
+              {{- $gw := (default (dict) $.Values.mcp.gateway).enforceAudience }}
+              value: {{ (ternary $.Values.mcp.enforceAudience $gw (kindIs "invalid" $gw)) | quote }}
             # The platform MCP resource. While mcp.acceptPlatformAudience is
             # true (transitional, 0.12.1) the gateway accepts a token bound to
             # the platform audience as equivalent to this project's own; turn it

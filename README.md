@@ -186,7 +186,9 @@ current `corpo-valley.com` deployment.
 | `argocd.projectsArgocd.enabled` / `nsLogical` / `appProject` | `true` / `projects-argocd` / `projects` | The projects-ArgoCD wiring the chart expects. |
 | `argocd.trustedClientIds` | `argocd,gitea,claude-code-mcp` | Hydra clients that bypass the consent screen. |
 | `mcp.publicUrl` | `https://<hosts.mcp>` | What RFC 9728 protected-resource metadata announces. |
-| `mcp.enforceAudience` | `false` | RFC 8707 audience enforcement on MCP tokens (portal + gateway). Enable once your MCP clients send resource indicators. |
+| `mcp.enforceAudience` | `false` | RFC 8707 audience enforcement at the platform MCP (portal), and the default for the project gateways. Enable once the portal's `[mcp] audience-shadow` log shows every live client bound. |
+| `mcp.gateway.enforceAudience` | `null` (inherit) | Audience enforcement at the per-project MCP gateways, switchable independently of the platform surface. Enable once `[gateway] audience-shadow` shows `bound: true` for every live client. |
+| `mcp.acceptPlatformAudience` | `true` | Transitional: project gateways accept a token bound to the platform MCP audience. Set to `false` once `[gateway] audience-shadow` shows `platform: false` everywhere (pre-0.13.0 refresh grants live up to 30 days). |
 | `mcp.denyClientIds` | `argocd,gitea` | OAuth clients whose tokens the MCP endpoints refuse (confused-deputy guard). Deliberately excludes `claude-code-mcp`, which IS an MCP client. |
 | `auth.google.enabled` | `false` | "Login with Google" — see below. |
 | `auth.google.allowedDomains` | `[]` | Workspace domains allowed to sign in/up. Required when enabled. |
