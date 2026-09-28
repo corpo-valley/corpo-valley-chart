@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.12.1
-appVersion: "v0.12.1"
+version: 0.13.0
+appVersion: "v0.13.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,6 +39,10 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: changed
+      description: "MCP authorization facade is resource-aware (portal + mcp-gateway v0.13.0): a client's RFC 8707 resource selects exactly one canonical audience (platform, or one project), malformed resources are refused with 400 invalid_target instead of falling back to the platform audience, per-project grants are never remembered across consents, the project gateway's AS metadata now points at the facade too, and the facade is rate-limited. Restores the per-resource binding 0.11.0 set out to establish so audience enforcement can be switched on."
+    - kind: added
+      description: "mcp.gateway.enforceAudience (null = inherit mcp.enforceAudience) splits project-MCP enforcement from platform-MCP enforcement so the two surfaces can be turned on independently."
     - kind: fixed
       description: "per-project MCP endpoints were unreachable since 0.11.0 (403 invalid_audience): the portal's authorization facade stamps every MCP token with the platform MCP audience, which the project gateway rejected as a foreign resource. The gateway now receives PUBLIC_MCP_URL and accepts the platform audience while mcp.acceptPlatformAudience (new, default true) is set; the per-request project-access check remains authoritative. Portal + mcp-gateway images bumped to v0.12.1 (also restores the MCP deny list to the same fallback chain as the gateway — the 0.11.0 union wrongly denied claude-code-mcp at the platform MCP)."
     - kind: fixed

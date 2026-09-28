@@ -256,6 +256,13 @@
         "publicUrl":       { "type": "string" },
         "enforceAudience": { "type": "boolean" },
         "acceptPlatformAudience": { "type": "boolean" },
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enforceAudience": { "type": ["boolean", "null"] }
+          }
+        },
         "denyClientIds":   { "type": "string" }
       }
     },

@@ -52,13 +52,17 @@ spec:
                 secretKeyRef: { name: portal-platform-secrets, key: INTERNAL_WEBHOOK_SECRET }
             - name: PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
+            # Project-surface enforcement is switchable independently of the
+            # platform surface (mcp.enforceAudience): the platform has been bound
+            # since 0.11.0, project audiences only since 0.13.0. Defaults to the
+            # platform flag when unset.
             - name: MCP_ENFORCE_AUDIENCE
-              value: {{ $.Values.mcp.enforceAudience | quote }}
-            # The platform MCP resource. The portal's authorization facade
-            # stamps every MCP token with THIS audience (it can't mint
-            # per-project ones yet); the gateway accepts it as equivalent to the
-            # project's own resource while mcp.acceptPlatformAudience is true,
-            # otherwise every project MCP endpoint 403s with invalid_audience.
+              value: {{ (ternary $.Values.mcp.enforceAudience $.Values.mcp.gateway.enforceAudience (kindIs "invalid" $.Values.mcp.gateway.enforceAudience)) | quote }}
+            # The platform MCP resource. While mcp.acceptPlatformAudience is
+            # true (transitional, 0.12.1) the gateway accepts a token bound to
+            # the platform audience as equivalent to this project's own; turn it
+            # off once every client re-authorizes for per-project audiences
+            # (0.13.0 facade) so a platform token stops being valid here.
             - name: PUBLIC_MCP_URL
               value: {{ $mcpPublicUrl | quote }}
             - name: MCP_ACCEPT_PLATFORM_AUDIENCE
