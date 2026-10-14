@@ -73,15 +73,18 @@ jobs:
             exit 0
           fi
 
-          # Rebuild the repo index, merging entries for already-published versions.
-          if [ -f ../ghp/index.yaml ]; then
-            helm repo index ../ghp --url "$PAGES_URL" --merge ../ghp/index.yaml
-          else
-            helm repo index ../ghp --url "$PAGES_URL"
-          fi
+          # Rebuild the repo index from the packages actually present on gh-pages.
+          # No --merge: the previous index carried entries for .tgz files that were
+          # never committed (see below), and a dangling entry breaks `helm install
+          # --version` for that version; the index must only list what is served.
+          helm repo index ../ghp --url "$PAGES_URL"
 
           cd ../ghp
-          git add -A
+          # gh-pages inherited main's .gitignore, which ignores `*.tgz` — so a plain
+          # `git add -A` committed index.yaml but silently dropped every package
+          # (every version 0.11.0–0.13.0 was "published" as a 404). Force-add the
+          # packages and the index explicitly.
+          git add -f -- ./*.tgz index.yaml
           git commit -m "Publish chart package(s):${published}"
           # Update of an existing branch (not a ref creation) — allowed by the rulesets.
           git push origin gh-pages
