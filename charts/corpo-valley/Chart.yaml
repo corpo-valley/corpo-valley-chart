@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.15.0
-appVersion: "v0.15.0"
+version: 0.16.0
+appVersion: "v0.16.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -40,14 +40,6 @@ keywords:
 annotations:
   artifacthub.io/changes: |
     - kind: added
-      description: "Portal honours project grants on the dashboard (portal v0.15.0): a user granted admin on a project can manage it (delete, data volumes, sharing); write grantees manage secrets and capabilities; read grantees view. Only explicit user/group grants count, read/write from the repo facet like the MCP tools, admin on either facet; the everyone grant never opens the management page. Platform admins get admin on every project."
-    - kind: added
-      description: "Platform-admin All projects page with ownership transfer: moves the Gitea repo, portal owner, grants, collaborators and the ArgoCD Application repoURL, audited in cv_resource_audit; the pin endpoint rewrites the image path as well as the tag so the first post-transfer build converges."
-    - kind: changed
-      description: "Community page: badges leave project rows; new Users tab lists residents with their badges and shared projects; public profiles list shared projects."
+      description: "Platform-admin Project health pages (/admin/health): per-project pod state, restarts, warning events, CPU/memory against quota (metrics.k8s.io), ArgoCD sync/health, and a one-container log viewer; red/amber/green scoring. The portal ClusterRole gains read on metrics.k8s.io pods."
     - kind: fixed
-      description: "mcp-gateway egress NetworkPolicy now allows the portal pod on :3000, so the per-project gateway access check reaches the portal instead of failing closed (every project-MCP request was 403 forbidden_project since the gateway shipped)."
-    - kind: fixed
-      description: "Gitea 1.22 collaborator permissions are read via the per-user permission endpoint, so grant downgrades to read are applied."
-    - kind: changed
-      description: "Dependency refresh: Node 24 and distroless nodejs24 images, Go 1.27 for cooldeps, express 4.22 / express-rate-limit 8 / pg 8.23 / TypeScript 6; all seven Dependabot alerts resolved."
+      description: "Regenerating k8s/deployment.yaml (capability toggles) preserves the pinned image tag instead of resetting every container to :bootstrap until the next build; the generator and the pin endpoint share one image-line grammar anchored on the configured registry."
