@@ -148,4 +148,10 @@ spec:
         - { ipBlock: { cidr: {{ $.Values.cluster.podCIDR }} } }
         - { ipBlock: { cidr: {{ $.Values.cluster.serviceCIDR }} } }
       ports: [{ protocol: TCP, port: 80 }, { protocol: TCP, port: 9000 }]
+    # The gateway's per-request access check calls the portal Service (:80 ->
+    # pod :3000). Policy is evaluated after the Service DNAT, so the pod port
+    # must be allowed explicitly or every check fails closed (perm=none).
+    - to:
+        - podSelector: { matchLabels: { app: portal } }
+      ports: [{ protocol: TCP, port: 3000 }]
 {{- end }}
