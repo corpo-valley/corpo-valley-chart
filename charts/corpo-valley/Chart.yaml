@@ -16,8 +16,8 @@ description: |
   platform/tenants cluster split but are not yet rendered by this version.
 
 type: application
-version: 0.13.0
-appVersion: "v0.13.0"
+version: 0.15.0
+appVersion: "v0.15.0"
 
 home: https://github.com/corpo-valley/corpo-valley-main
 sources:
@@ -39,33 +39,15 @@ keywords:
 
 annotations:
   artifacthub.io/changes: |
+    - kind: added
+      description: "Portal honours project grants on the dashboard (portal v0.15.0): a user granted admin on a project can manage it (delete, data volumes, sharing); write grantees manage secrets and capabilities; read grantees view. Only explicit user/group grants count, read/write from the repo facet like the MCP tools, admin on either facet; the everyone grant never opens the management page. Platform admins get admin on every project."
+    - kind: added
+      description: "Platform-admin All projects page with ownership transfer: moves the Gitea repo, portal owner, grants, collaborators and the ArgoCD Application repoURL, audited in cv_resource_audit; the pin endpoint rewrites the image path as well as the tag so the first post-transfer build converges."
     - kind: changed
-      description: "MCP authorization facade is resource-aware (portal + mcp-gateway v0.13.0): a client's RFC 8707 resource selects exactly one canonical audience (platform, or one project), malformed resources are refused with 400 invalid_target instead of falling back to the platform audience, per-project grants are never remembered across consents, the project gateway's AS metadata now points at the facade too, and the facade is rate-limited. Restores the per-resource binding 0.11.0 set out to establish so audience enforcement can be switched on."
-    - kind: added
-      description: "mcp.gateway.enforceAudience (null = inherit mcp.enforceAudience) splits project-MCP enforcement from platform-MCP enforcement so the two surfaces can be turned on independently."
+      description: "Community page: badges leave project rows; new Users tab lists residents with their badges and shared projects; public profiles list shared projects."
     - kind: fixed
-      description: "per-project MCP endpoints were unreachable since 0.11.0 (403 invalid_audience): the portal's authorization facade stamps every MCP token with the platform MCP audience, which the project gateway rejected as a foreign resource. The gateway now receives PUBLIC_MCP_URL and accepts the platform audience while mcp.acceptPlatformAudience (new, default true) is set; the per-request project-access check remains authoritative. Portal + mcp-gateway images bumped to v0.12.1 (also restores the MCP deny list to the same fallback chain as the gateway — the 0.11.0 union wrongly denied claude-code-mcp at the platform MCP)."
+      description: "mcp-gateway egress NetworkPolicy now allows the portal pod on :3000, so the per-project gateway access check reaches the portal instead of failing closed (every project-MCP request was 403 forbidden_project since the gateway shipped)."
     - kind: fixed
-      description: "sealed-secrets cert is now fetched through the Kubernetes API server's service-proxy (authenticated + TLS-verified) instead of a plaintext HTTP fetch guarded by a manually-pinned SPKI hash. Removes the every-30-days breakage when the controller rotated its key: rotation now propagates automatically. Retired cluster.sealedSecretsCertSha256 and scripts/print-cert-pin.sh; added a GET-only kube-system Role (services/proxy) for the portal SA. Platform images bumped to v0.10.1."
-    - kind: added
-      description: "optional cooldeps package-manager gating proxy (npm/PyPI/Go) — enable with cooldeps.enabled to deploy an in-cluster cooldeps service, route the Gitea CI runners through it (release-age + license + CVE gating), and surface an /admin/cooldeps policy page plus reminders to MCP agents; cooldeps.publicIngress optionally exposes it at cooldeps.<domain> with an Oathkeeper noop rule"
-    - kind: added
-      description: per-project CPU / storage / pod / PVC budgets — operator-tunable via tenant.{cpu,storage,pods,pvcs}.* (injected as CV_* env) and per-project raisable by an admin from the portal's Project Resources page; complements the existing tenant.memory.* knobs
+      description: "Gitea 1.22 collaborator permissions are read via the per-user permission endpoint, so grant downgrades to read are applied."
     - kind: changed
-      description: "BREAKING: retired the top-level `blob:` section — per-project Garage config moved to tenant.capabilities.garage.image and the per-volume storage cap to tenant.storage.maxPerVolume. Update any values files that set blob.garageImage / blob.storageMax."
-    - kind: added
-      description: tenant.capabilities.{postgres,garage}.image pin each per-project StatefulSet AND its cv-projects-<name>-bounds admission policy from a single value (the Postgres image is now chart-configurable, pinned to one image)
-    - kind: changed
-      description: the two near-identical per-capability ValidatingAdmissionPolicies collapsed into a shared cv.capabilityBounds helper; the per-volume storage cap (tenant.storage.maxPerVolume) now drives both
-    - kind: added
-      description: per-project Garage (S3-compatible blob) capability — an optional per-project Garage StatefulSet, the blob analog of the per-project Postgres capability, fenced by the cv-projects-garage-bounds VAP (image + PVC-size pin)
-    - kind: changed
-      description: platform images (portal, mcp-gateway) and the Garage image pinned to v0.8.0
-    - kind: fixed
-      description: cluster.sealedSecretsControllerUrl default no longer includes the /v1/cert.pem path — the portal appends that itself, so the baked-in suffix produced a doubled path and broke project secret sealing
-    - kind: fixed
-      description: ory-postgres StatefulSet now sets podManagementPolicy explicitly to OrderedReady (the Kubernetes-persisted default) so it never differs literally from a pre-chart object — removing one of the two immutable-field mismatches that blocked adopting an existing deployment under GitOps
-    - kind: added
-      description: storage.oryPostgresClassName overrides the StorageClass on the ory-postgres volume (unset inherits storage.className, set-but-empty omits the field so the cluster default binds) — lets an adopted, pre-chart ory-postgres render a volumeClaimTemplate matching its existing (immutable) volumes
-    - kind: added
-      description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
+      description: "Dependency refresh: Node 24 and distroless nodejs24 images, Go 1.27 for cooldeps, express 4.22 / express-rate-limit 8 / pg 8.23 / TypeScript 6; all seven Dependabot alerts resolved."
