@@ -410,6 +410,10 @@ spec:
               value: {{ $.Values.tenant.pvcs.max | quote }}
             - name: CV_PORTAL_INTERNAL_URL
               value: http://{{ include "cv.svc" (list $ "portal" "portal") }}
+            # Generated project Ingresses refuse Brotli-encoded request bodies
+            # (CVE-2026-111497 defence in depth); see ingress.rejectBrotliRequestBodies.
+            - name: CV_INGRESS_REJECT_BROTLI_BODIES
+              value: {{ $.Values.ingress.rejectBrotliRequestBodies | quote }}
             - name: CV_POD_CIDR
               value: {{ $.Values.cluster.podCIDR | quote }}
             - name: CV_SERVICE_CIDR
@@ -476,9 +480,12 @@ metadata:
   labels:
     {{- include "cv.labels" $ | nindent 4 }}
     app: portal
-  {{- with $.Values.ingress.commonAnnotations }}
+  {{- if or $.Values.ingress.rejectBrotliRequestBodies $.Values.ingress.commonAnnotations }}
   annotations:
+    {{- include "cv.ingressBrotliReject" $ | nindent 4 }}
+    {{- with $.Values.ingress.commonAnnotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   ingressClassName: {{ $.Values.ingress.className }}
@@ -502,6 +509,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "1m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    {{- include "cv.ingressBrotliReject" $ | nindent 4 }}
     {{- with $.Values.ingress.commonAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
@@ -530,9 +538,12 @@ metadata:
   labels:
     {{- include "cv.labels" $ | nindent 4 }}
     app: portal
-  {{- with $.Values.ingress.commonAnnotations }}
+  {{- if or $.Values.ingress.rejectBrotliRequestBodies $.Values.ingress.commonAnnotations }}
   annotations:
+    {{- include "cv.ingressBrotliReject" $ | nindent 4 }}
+    {{- with $.Values.ingress.commonAnnotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   ingressClassName: {{ $.Values.ingress.className }}
