@@ -73,6 +73,11 @@ rules:
   - apiGroups: ["bitnami.com"]
     resources: ["sealedsecrets"]
     verbs: ["get", "list", "watch"]
+  # Admin "Project health" page: live CPU/memory per pod from the metrics API
+  # (metrics-server). Read-only; the page degrades to "n/a" without it.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
