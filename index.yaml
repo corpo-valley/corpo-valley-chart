@@ -3,6 +3,48 @@ entries:
   corpo-valley:
   - annotations:
       artifacthub.io/changes: |
+        - kind: security
+          description: "Node2Shell (CVE-2026-111497): portal and mcp-gateway images build on Node 24.22.1 and run on distroless nodejs24-debian13 (Node v24.22.2). New value ingress.rejectBrotliRequestBodies (default true) stamps a configuration-snippet that answers 415 to any request with Content-Encoding: br on the portal, portal-mcp and portal-oauth-dcr-shim Ingresses, and the portal env CV_INGRESS_REJECT_BROTLI_BODIES puts the same guard on generated project Ingresses. Effective only when ingress-nginx allows snippet annotations."
+        - kind: added
+          description: "Platform-admin Project health pages (/admin/health): per-project pod state, restarts, warning events, CPU/memory against quota (metrics.k8s.io), ArgoCD sync/health, and a one-container log viewer; red/amber/green scoring. The portal ClusterRole gains read on metrics.k8s.io pods."
+        - kind: fixed
+          description: "Regenerating k8s/deployment.yaml (capability toggles) preserves the pinned image tag instead of resetting every container to :bootstrap until the next build; the generator and the pin endpoint share one image-line grammar anchored on the configured registry."
+    apiVersion: v2
+    appVersion: v0.16.1
+    created: "2026-10-30T20:43:24.138631338Z"
+    description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
+      platform that abstracts code + infra so non-technical users can drive Claude
+      Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
+      registry, MCP gateway, and the per-project bounds (VAPs / AppProjects / NetworkPolicies).  Platform
+      images are built from github.com/corpo-valley/corpo-valley-main and published
+      to ghcr.io/corpo-valley/corpo-valley-*. This chart references them via values
+      but does not require any source from the build repo.  Phase 1 ships `role: all-in-one`
+      — one cluster, single platform instance. The `role: platform` / `role: tenants`
+      modes are scaffolded for a future platform/tenants cluster split but are not
+      yet rendered by this version. '
+    digest: 880e8b96686f342156b9112ae35ac1c6ec5f994c48970f0acf8707dba745eade
+    home: https://github.com/corpo-valley/corpo-valley-main
+    keywords:
+    - ory
+    - kratos
+    - hydra
+    - argocd
+    - gitops
+    - mcp
+    - claude-code
+    maintainers:
+    - name: corpo-valley
+      url: https://github.com/corpo-valley
+    name: corpo-valley
+    sources:
+    - https://github.com/corpo-valley/corpo-valley-main
+    - https://github.com/corpo-valley/corpo-valley-chart
+    type: application
+    urls:
+    - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.16.1.tgz
+    version: 0.16.1
+  - annotations:
+      artifacthub.io/changes: |
         - kind: added
           description: "Portal honours project grants on the dashboard (portal v0.15.0): a user granted admin on a project can manage it (delete, data volumes, sharing); write grantees manage secrets and capabilities; read grantees view. Only explicit user/group grants count, read/write from the repo facet like the MCP tools, admin on either facet; the everyone grant never opens the management page. Platform admins get admin on every project."
         - kind: added
@@ -17,7 +59,7 @@ entries:
           description: "Dependency refresh: Node 24 and distroless nodejs24 images, Go 1.27 for cooldeps, express 4.22 / express-rate-limit 8 / pg 8.23 / TypeScript 6; all seven Dependabot alerts resolved."
     apiVersion: v2
     appVersion: v0.15.0
-    created: "2026-10-14T21:19:38.51629367Z"
+    created: "2026-10-30T20:43:24.134971089Z"
     description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
       platform that abstracts code + infra so non-technical users can drive Claude
       Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
@@ -83,7 +125,7 @@ entries:
           description: README "Adopting an existing deployment" section documents the StatefulSet immutable-field caveat and the ArgoCD ignoreDifferences + RespectIgnoreDifferences=true backstop
     apiVersion: v2
     appVersion: v0.13.0
-    created: "2026-10-14T21:19:38.515159667Z"
+    created: "2026-10-30T20:43:24.132749004Z"
     description: 'Corpo Valley platform — a parameterized Helm chart for the single-tenant
       platform that abstracts code + infra so non-technical users can drive Claude
       Code safely. Renders the Ory identity stack, the portal, Gitea, dual ArgoCD,
@@ -115,4 +157,4 @@ entries:
     urls:
     - https://corpo-valley.github.io/corpo-valley-chart/corpo-valley-0.13.0.tgz
     version: 0.13.0
-generated: "2026-10-14T21:19:38.513699155Z"
+generated: "2026-10-30T20:43:24.13042115Z"
