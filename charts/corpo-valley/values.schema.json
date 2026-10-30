@@ -183,8 +183,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "className":         { "type": "string" },
-        "commonAnnotations": { "type": "object" }
+        "className":                 { "type": "string" },
+        "commonAnnotations":         { "type": "object" },
+        "rejectBrotliRequestBodies": { "type": "boolean" }
       }
     },
     "cluster": {

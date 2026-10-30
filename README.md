@@ -168,6 +168,7 @@ current `corpo-valley.com` deployment.
 | `hosts.portal` | derived | Override only if the portal lives at a non-`portal.<domain>` host. |
 | `hosts.projectsWildcard` | `*.projects.<domain>` | Wildcard the projects ArgoCD's Ingresses live under. |
 | `hosts.oathkeeperWildcard` | `true` | Whether Oathkeeper publishes the `*.<domain>` Ingress. |
+| `ingress.rejectBrotliRequestBodies` | `true` | Portal and generated project Ingresses refuse `Content-Encoding: br` request bodies (415) via an ingress-nginx configuration-snippet — CVE-2026-111497 defence in depth. Needs `allow-snippet-annotations: "true"` on the controller to take effect; set false if your ingress-nginx admission webhook rejects snippets. |
 | `namespacePrefix` | `cv-` | Prefix for every platform namespace. Set to `acme-` etc. to coexist. |
 | `image.registry` | `ghcr.io/corpo-valley` | Container image registry. |
 | `image.prefix` | `corpo-valley-` | Concatenated with the component name. |

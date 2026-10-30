@@ -209,6 +209,22 @@ tenant:
 ingress:
   className: nginx
   commonAnnotations: {}
+  # Defence in depth for CVE-2026-111497 (Node2Shell, Brotli decoder OOB write
+  # in Node.js). When true, the portal's own Ingresses AND every project Ingress
+  # the portal generates carry an ingress-nginx configuration-snippet that
+  # refuses request bodies declared `Content-Encoding: br` with 415 before nginx
+  # proxies them, so no Node body parser behind the edge ever Brotli-decodes
+  # client-supplied bytes. Also rendered into the portal as
+  # CV_INGRESS_REJECT_BROTLI_BODIES.
+  #
+  # ingress-nginx honours snippet annotations ONLY when its controller ConfigMap
+  # sets `allow-snippet-annotations: "true"` (default false since v1.9; the
+  # microk8s addon ConfigMap is ingress/nginx-load-balancer-microk8s-conf).
+  # Without it the controller logs that it dropped the annotation and serves
+  # the Ingress unprotected (no breakage). If your cluster runs the ingress-nginx
+  # admission webhook with snippets disabled, the webhook REJECTS such Ingresses
+  # — set this to false there, or enable snippets first.
+  rejectBrotliRequestBodies: true
 
 # Cluster CIDRs.
 # Consumed by the portal when it emits per-project egress NetworkPolicies.

@@ -89,6 +89,18 @@ app.kubernetes.io/part-of: corpo-valley-platform
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 {{- end -}}
 
+{{/*
+Ingress annotation refusing Brotli-encoded request bodies at the edge (415),
+defence in depth for CVE-2026-111497. Empty unless ingress.rejectBrotliRequestBodies.
+Usage: {{- include "cv.ingressBrotliReject" $ | nindent 4 }}
+*/}}
+{{- define "cv.ingressBrotliReject" -}}
+{{- if .Values.ingress.rejectBrotliRequestBodies -}}
+nginx.ingress.kubernetes.io/configuration-snippet: |
+  if ($http_content_encoding ~* "br") { return 415; }
+{{- end -}}
+{{- end -}}
+
 {{/* Whether the current role renders the platform tier (Ory/portal/gitea/etc.) */}}
 {{- define "cv.role.platform" -}}
 {{- $r := .Values.role -}}
