@@ -63,7 +63,7 @@ image:
     # Only consumed when cooldeps.enabled. Built from corpo-valley-main
     # containers/cooldeps (vendored upstream hashtagcyber/cooldeps). Aligned to
     # the platform release version as of 0.11.0 (was tracked independently).
-    cooldeps: v0.16.1
+    cooldeps: v0.16.2
 
 # Git source the platform ArgoCD AppProject scopes child Applications to.
 # Only needed if you GitOps the platform itself: point it at YOUR deployment
